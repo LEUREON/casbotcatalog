@@ -1,24 +1,58 @@
 // project/src/components/Admin/AdminUsers.tsx
+import React, { useState, useEffect, Fragment } from "react";
+import { Dialog, Transition } from "@headlessui/react";
+import {
+  User,
+  Shield,
+  Edit,
+  Lock,
+  Unlock,
+  Save,
+  X,
+} from "lucide-react";
+import { useData } from "../../contexts/DataContext";
+import { User as UserType } from "../../types";
 
-import React, { useState, useEffect, Fragment } from 'react';
-import { Dialog, Transition } from '@headlessui/react';
-import { User, Shield, Edit, Lock, Unlock, Mail, UserCircle, Save, X, Image as ImageIcon } from 'lucide-react';
-import { useData } from '../../contexts/DataContext';
-import { User as UserType } from '../../types';
+const ACCENT = "#f7cfe1";
+const BORDER = "rgba(255,255,255,0.10)";
+
+function surfaceStyle({
+  elevated = false,
+}: { elevated?: boolean } = {}) {
+  const baseAlpha = elevated ? 0.09 : 0.07;
+  return {
+    background: `
+      radial-gradient(600px 260px at 0% 0%, rgba(247, 207, 225,0.10), transparent 60%),
+      radial-gradient(600px 260px at 100% 100%, rgba(120,140,255,0.09), transparent 60%),
+      rgba(255,255,255,${baseAlpha})
+    `,
+    border: `1px solid ${BORDER}`,
+    boxShadow: "none", // Тень убрана
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+  } as React.CSSProperties;
+}
+
+const INPUT_CLS = "w-full rounded-xl px-4 py-2.5 bg-black/[.15] border border-white/15 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50";
+const SELECT_CLS = INPUT_CLS + " pr-10 appearance-none";
+const FILE_INPUT_CLS = "block w-full text-sm text-white/90 file:mr-4 file:rounded-lg file:border-0 file:bg-white/10 file:px-4 file:py-2 file:text-white hover:file:bg-white/20";
+
 
 export function AdminUsers() {
-  const { users, usersLoading, loadUsers, updateUser } = useData();
+  const { users, loadUsers, updateUser } = useData();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserType | null>(null);
-  const [formData, setFormData] = useState<Partial<UserType> & { newPassword?: string, newPasswordConfirm?: string }>({});
+  const [formData, setFormData] = useState<
+    Partial<UserType> & { newPassword?: string; newPasswordConfirm?: string }
+  >({});
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState<string>("");
 
   useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
+    if (!users.length) loadUsers();
+  }, [users.length, loadUsers]);
 
-  const openEditModal = (user: UserType) => {
+  const openModal = (user: UserType) => {
     setEditingUser(user);
     setFormData({
       nickname: user.nickname,
@@ -27,7 +61,7 @@ export function AdminUsers() {
       role: user.role,
     });
     setAvatarFile(null);
-    setMessage('');
+    setMessage("");
     setIsModalOpen(true);
   };
 
@@ -38,164 +72,166 @@ export function AdminUsers() {
 
   const handleSave = async () => {
     if (!editingUser) return;
-    setMessage('');
-    
+    setMessage("");
+
     if (formData.newPassword && formData.newPassword !== formData.newPasswordConfirm) {
-        setMessage('Пароли не совпадают!');
-        return;
+      setMessage("Пароли не совпадают!");
+      return;
     }
-    if (formData.newPassword && formData.newPassword.length < 8) {
-        setMessage('Новый пароль должен содержать не менее 8 символов.');
-        return;
+    if (formData.newPassword && (formData.newPassword?.length || 0) < 8) {
+      setMessage("Новый пароль должен содержать не менее 8 символов.");
+      return;
     }
 
     const dataToSend = new FormData();
-    if (formData.nickname !== editingUser.nickname) dataToSend.append('nickname', formData.nickname || '');
-    if (formData.username !== editingUser.username) dataToSend.append('username', formData.username || '');
-    if (formData.email !== editingUser.email) dataToSend.append('email', formData.email || '');
-    if (formData.role !== editingUser.role) dataToSend.append('role', formData.role || 'user');
-    if (formData.newPassword) {
-        dataToSend.append('password', formData.newPassword);
-        dataToSend.append('passwordConfirm', formData.newPasswordConfirm || '');
-    }
-    if (avatarFile) {
-        dataToSend.append('avatar', avatarFile);
-    }
-    
+    if (formData.nickname && formData.nickname !== editingUser.nickname)
+      dataToSend.append("nickname", String(formData.nickname));
+    if (formData.username && formData.username !== editingUser.username)
+      dataToSend.append("username", String(formData.username));
+    if (formData.email && formData.email !== editingUser.email)
+      dataToSend.append("email", String(formData.email));
+    if (formData.role && formData.role !== editingUser.role)
+      dataToSend.append("role", String(formData.role));
+    if (formData.newPassword) dataToSend.append("password", String(formData.newPassword));
+    if (avatarFile) dataToSend.append("avatar", avatarFile);
+
     let hasData = false;
-    // @ts-ignore
-    for (const _ of dataToSend.entries()) {
-        hasData = true;
-        break;
+    for (const _ of (dataToSend as any).entries()) {
+      hasData = true;
+      break;
     }
     if (!hasData) {
-        setMessage('Нет изменений для сохранения.');
-        return;
+      setMessage("Нет изменений для сохранения.");
+      return;
     }
 
     const success = await updateUser(editingUser.id, dataToSend);
-
     if (success) {
+      await loadUsers();
       closeModal();
     } else {
-      setMessage('Ошибка при обновлении пользователя.');
+      setMessage("Не удалось сохранить изменения.");
     }
   };
 
-  const handleBlockToggle = (user: UserType) => {
-    // ▼▼▼ ИСПРАВЛЕНИЕ ЗДЕСЬ ▼▼▼
-    updateUser(user.id, { is_blocked: !user.isBlocked });
-    // ▲▲▲ КОНЕЦ ИСПРАВЛЕНИЙ ▲▲▲
+  const toggleBlock = async (user: UserType) => {
+    await updateUser(user.id, { is_blocked: !user.isBlocked });
+    await loadUsers();
   };
 
-  if (usersLoading) {
-    return <div className="p-6 text-center text-slate-400 animate-pulse">Загрузка пользователей...</div>;
-  }
-
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-white">Управление пользователями</h2>
-        <div className="flex items-center space-x-2 text-slate-400">
+    <div className="p-4 sm:p-6">
+      <div className="mb-4 sm:mb-6 flex items-center justify-between">
+        <h2 className="text-xl sm:text-2xl font-bold">Управление пользователями</h2>
+        <div className="hidden sm:flex items-center gap-2 text-slate-300">
           <Shield className="h-5 w-5" />
           <span>Всего: {users.length}</span>
         </div>
       </div>
 
-      <div className="space-y-4">
-        {users.map((user) => (
-          <div key={user.id} className="glass-light rounded-2xl p-4 border border-white/10">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center space-x-4">
-                <img
-                  src={user.avatar || `https://api.dicebear.com/8.x/initials/svg?seed=${user.username}`}
-                  alt={user.nickname}
-                  className="w-12 h-12 rounded-full object-cover bg-slate-700"
-                />
-                <div>
-                  <h3 className="font-bold text-white">
-                    {user.nickname} <span className="text-slate-400 text-sm">@{user.username}</span>
-                  </h3>
-                  <p className="text-slate-400 text-sm">{user.email}</p>
+      <div className="space-y-3 sm:space-y-4">
+        {users.map((u) => (
+          <div
+            key={u.id}
+            className="rounded-2xl p-4 sm:p-5"
+            style={surfaceStyle()}
+          >
+            <div className="flex items-center gap-4">
+              <img
+                src={u.avatar || "https://placehold.co/64x64?text=U"}
+                alt={u.nickname || u.username}
+                className="w-14 h-14 rounded-2xl object-cover border"
+                style={{ borderColor: BORDER }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold truncate">
+                  {u.nickname || "Без имени"}
+                </div>
+                <div className="text-sm opacity-80 truncate">@{u.username}</div>
+                <div className="text-sm opacity-70 truncate">{u.email}</div>
+                <div className="mt-1 text-xs inline-flex items-center gap-2">
+                  <span
+                    className="px-2 py-0.5 rounded-lg border"
+                    style={{ borderColor: BORDER }}
+                  >
+                    Роль: <b>{u.role}</b>
+                  </span>
+                  {u.isBlocked && (
+                    <span
+                      className="px-2 py-0.5 rounded-lg border"
+                      style={{ borderColor: BORDER, color: "#fca5a5" }}
+                    >
+                      Заблокирован
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <span className={`px-2 py-1 rounded-lg text-xs font-bold ${user.role === 'admin' ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-500/20 text-slate-300'}`}>
-                  {user.role}
-                </span>
-                {user.isBlocked && (
-                  <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded-lg text-xs font-bold">ЗАБЛОКИРОВАН</span>
-                )}
-              </div>
-              <div className="flex space-x-2">
-                <button onClick={() => openEditModal(user)} className="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg">
-                  <Edit className="h-4 w-4" />
-                </button>
-                <button onClick={() => handleBlockToggle(user)} className={`p-2 rounded-lg ${user.isBlocked ? "text-green-400 hover:bg-green-500/20" : "text-red-400 hover:bg-red-500/20"}`}>
-                  {user.isBlocked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                </button>
-              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:gap-3">
+              <button
+                onClick={() => openModal(u)}
+                className="w-full rounded-xl px-4 py-2 border font-medium flex items-center justify-center gap-2"
+                style={{ borderColor: BORDER, background: "rgba(255,255,255,0.03)" }}
+              >
+                <Edit size={16} />
+                Редактировать
+              </button>
+              <button
+                onClick={() => toggleBlock(u)}
+                className="w-full rounded-xl px-4 py-2 border font-medium flex items-center justify-center gap-2"
+                style={{ borderColor: BORDER, background: "rgba(255,255,255,0.03)" }}
+              >
+                {u.isBlocked ? <Unlock size={16} /> : <Lock size={16} />}
+                {u.isBlocked ? "Разблокировать" : "Заблокировать"}
+              </button>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Edit Modal */}
       <Transition appear show={isModalOpen} as={Fragment}>
         <Dialog as="div" className="relative z-50" onClose={closeModal}>
-            <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
-            </Transition.Child>
+          <Transition.Child as={Fragment} enter="ease-out duration-150" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-150" leaveFrom="opacity-100" leaveTo="opacity-0">
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" />
+          </Transition.Child>
 
-            <div className="fixed inset-0 overflow-y-auto">
-                <div className="flex min-h-full items-center justify-center p-4 text-center">
-                    <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0 scale-95" enterTo="opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="opacity-100 scale-100" leaveTo="opacity-0 scale-95">
-                        <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl glass p-6 text-left align-middle shadow-xl transition-all border border-white/10">
-                            <Dialog.Title as="h3" className="text-lg font-bold leading-6 text-white mb-4">
-                                Редактировать: {editingUser?.nickname}
-                            </Dialog.Title>
-                            
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="text-sm text-slate-400 mb-1 block">Никнейм</label>
-                                    <input type="text" value={formData.nickname || ''} onChange={(e) => setFormData({...formData, nickname: e.target.value})} className="w-full px-4 py-2 glass rounded-lg text-white" />
-                                </div>
-                                <div>
-                                    <label className="text-sm text-slate-400 mb-1 block">Логин</label>
-                                    <input type="text" value={formData.username || ''} onChange={(e) => setFormData({...formData, username: e.target.value})} className="w-full px-4 py-2 glass rounded-lg text-white" />
-                                </div>
-                                <div>
-                                    <label className="text-sm text-slate-400 mb-1 block">Email</label>
-                                    <input type="email" value={formData.email || ''} onChange={(e) => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-2 glass rounded-lg text-white" />
-                                </div>
-                                <div>
-                                    <label className="text-sm text-slate-400 mb-1 block">Роль</label>
-                                    <select value={formData.role || 'user'} onChange={(e) => setFormData({...formData, role: e.target.value as 'user' | 'admin'})} className="w-full px-4 py-2 glass rounded-lg text-white">
-                                        <option value="user">User</option>
-                                        <option value="admin">Admin</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="text-sm text-slate-400 mb-1 block">Новый пароль (оставьте пустым, чтобы не менять)</label>
-                                    <input type="password" placeholder="Новый пароль" value={formData.newPassword || ''} onChange={(e) => setFormData({...formData, newPassword: e.target.value})} className="w-full px-4 py-2 glass rounded-lg text-white mb-2" />
-                                    <input type="password" placeholder="Подтвердите пароль" value={formData.newPasswordConfirm || ''} onChange={(e) => setFormData({...formData, newPasswordConfirm: e.target.value})} className="w-full px-4 py-2 glass rounded-lg text-white" />
-                                </div>
-                                <div>
-                                    <label className="text-sm text-slate-400 mb-1 block">Новый аватар</label>
-                                    <input type="file" onChange={(e) => setAvatarFile(e.target.files ? e.target.files[0] : null)} className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20"/>
-                                </div>
-                            </div>
-                            
-                            {message && <p className="text-sm text-red-400 mt-4">{message}</p>}
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-end sm:items-center justify-center p-2 sm:p-4 text-center">
+              <Transition.Child as={Fragment} enter="ease-out duration-200" enterFrom="opacity-0 translate-y-6 sm:translate-y-0 sm:scale-95" enterTo="opacity-100 translate-y-0 sm:scale-100" leave="ease-in duration-150" leaveFrom="opacity-100 translate-y-0 sm:scale-100" leaveTo="opacity-0 translate-y-6 sm:translate-y-0 sm:scale-95">
+                <Dialog.Panel className="w-full sm:max-w-lg sm:rounded-2xl text-left align-middle transition-all" style={surfaceStyle({ elevated: true })}>
+                  <div className="p-4 sm:p-6">
+                    <Dialog.Title className="text-lg font-bold leading-6 mb-4">
+                      Редактировать: {editingUser?.nickname}
+                    </Dialog.Title>
 
-                            <div className="mt-6 flex justify-end space-x-2">
-                                <button onClick={closeModal} className="px-4 py-2 text-sm font-medium text-slate-300 rounded-lg hover:bg-white/10">Отмена</button>
-                                <button onClick={handleSave} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Сохранить</button>
-                            </div>
-                        </Dialog.Panel>
-                    </Transition.Child>
-                </div>
+                    <div className="space-y-4">
+                      <div><label className="text-sm text-slate-300 mb-1 block">Никнейм</label><input type="text" value={formData.nickname || ""} onChange={(e) => setFormData({ ...formData, nickname: e.target.value })} className={INPUT_CLS}/></div>
+                      <div><label className="text-sm text-slate-300 mb-1 block">Логин</label><input type="text" value={formData.username || ""} onChange={(e) => setFormData({ ...formData, username: e.target.value })} className={INPUT_CLS}/></div>
+                      <div><label className="text-sm text-slate-300 mb-1 block">Email</label><input type="email" value={formData.email || ""} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className={INPUT_CLS}/></div>
+                      <div><label className="text-sm text-slate-300 mb-1 block">Роль</label><select value={formData.role as any} onChange={(e) => setFormData({ ...formData, role: e.target.value as any })} className={SELECT_CLS}><option value="user">Пользователь</option><option value="admin">Администратор</option></select></div>
+                      <div><label className="text-sm text-slate-300 mb-1 block">Новый пароль</label><input type="password" placeholder="Новый пароль (оставьте пустым)" value={formData.newPassword || ""} onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })} className={INPUT_CLS}/></div>
+                      <div><label className="text-sm text-slate-300 mb-1 block">Подтвердите пароль</label><input type="password" placeholder="Подтвердите пароль" value={formData.newPasswordConfirm || ""} onChange={(e) => setFormData({...formData, newPasswordConfirm: e.target.value })} className={INPUT_CLS}/></div>
+                      <div><label className="text-sm text-slate-300 mb-1 block">Новый аватар</label><input type="file" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} className={FILE_INPUT_CLS}/></div>
+                    </div>
+
+                    {message && (
+                      <p className="text-sm text-red-400 mt-3">{message}</p>
+                    )}
+                  </div>
+
+                  <div className="sticky bottom-0 w-full flex gap-2 p-3 sm:p-4" style={{...surfaceStyle(), borderTopLeftRadius: 0, borderTopRightRadius: 0 }}>
+                    <button onClick={closeModal} className="w-1/2 rounded-xl px-4 py-2 border font-medium" style={{ borderColor: BORDER, background: "rgba(255,255,255,0.03)" }}>
+                      Отмена
+                    </button>
+                    <button onClick={handleSave} className="w-1/2 rounded-xl px-4 py-2 font-semibold text-black" style={{ background: ACCENT }}>
+                      Сохранить
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
             </div>
+          </div>
         </Dialog>
       </Transition>
     </div>

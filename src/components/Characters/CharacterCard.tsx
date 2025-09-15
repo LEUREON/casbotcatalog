@@ -1,43 +1,53 @@
 // project/src/components/Characters/CharacterCard.tsx
 
-import React, { useState, memo } from 'react';
+import React, { useState, memo, useMemo } from 'react';
 import { Heart, Star, Loader2, Flame } from 'lucide-react';
 import { Character } from '../../types';
 import { useAuth } from '../../contexts/AuthContext';
+import { useReviews } from '../../contexts/ReviewsContext';
 import { getAgeString } from '../../utils/formatters';
 
-// --- Вспомогательные компоненты для чистоты кода ---
-
-const LoadingSpinner = () => <Loader2 className="w-5 h-5 animate-spin text-white" />;
-
-type BadgeProps = {
-  text: string;
-  icon?: React.ReactNode;
-  variant?: 'primary' | 'warning' | 'default';
-  className?: string;
+// --- Дизайн-токены ---
+const TOKENS = {
+  border: "rgba(255,255,255,0.16)",
+  itemBg: "rgba(255,255,255,0.08)",
+  itemBgActive: "rgba(255,255,255,0.12)",
+  accent: "#f7cfe1", // Нежно-розовый
+  orange: "#F97316", // Оранжевый (Tailwind Orange 500) для иконки огня
 };
 
-const Badge = ({ text, icon, variant = 'default', className = '' }: BadgeProps) => {
-  const baseClasses =
-    'flex items-center gap-2 px-3 py-1 rounded-full shadow-sm whitespace-nowrap transition-all duration-300 ease-out';
-  const glassClasses = 'backdrop-blur-[8px] bg-white/[0.12]';
-
-  const variantClasses = {
-    primary: 'text-white font-semibold',
-    warning: 'text-yellow-100 font-semibold',
-    default: 'text-gray-200 font-medium',
+// --- Вспомогательный компонент Badge ---
+const Badge = ({ text, icon: Icon, variant = 'default' }: {
+  text: string;
+  icon?: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  variant?: 'default' | 'accent' | 'warning';
+}) => {
+  const isAccent = variant === 'accent';
+  const isWarning = variant === 'warning';
+  
+  const iconStyle: React.CSSProperties = {
+    // ▼▼▼ ИЗМЕНЕНИЕ 1: Иконка (огонь) для 'accent' теперь оранжевая ▼▼▼
+    color: isWarning ? '#fbbf24' : (isAccent ? TOKENS.orange : 'currentColor'),
+    fill: isWarning ? '#fbbf24' : (isAccent ? TOKENS.orange : 'none'),
+    // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ 1 ▲▲▲
   };
 
   return (
-    <div className={`${baseClasses} ${glassClasses} ${variantClasses[variant]} ${className}`}>
-      {icon}
-      <span className="font-semibold">{text}</span>
+    <div
+      className="flex items-center justify-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-[8px]"
+      style={{
+        background: isAccent ? TOKENS.accent : TOKENS.itemBgActive,
+        color: isAccent ? '#111' : '#fff',
+        border: `1px solid ${isAccent ? 'transparent' : TOKENS.border}`,
+      }}
+    >
+      {Icon && <Icon className="w-3.5 h-3.5" style={iconStyle} />}
+      <span>{text}</span>
     </div>
   );
 };
 
 // --- Основной компонент карточки ---
-
 interface CharacterCardProps {
   character: Character;
   onClick: (character: Character) => void;
@@ -47,7 +57,17 @@ export const CharacterCard = memo(function CharacterCard({ character, onClick }:
   const { user, toggleFavorite } = useAuth();
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
 
-  const { id, name, photo, rating, isNew, occupation, gender, age, ageGroup, tags, description } = character;
+  const { id, name, photo, occupation, gender, age, ageGroup, tags, description, createdAt, isNew } = character;
+
+  const { reviews } = useReviews();
+  const { avgRating, reviewsCount } = useMemo(() => {
+    const list = reviews.filter(r => r.characterId === id && typeof r.rating === 'number' && (r.rating as any) > 0);
+    if (list.length === 0) return { avgRating: 0, reviewsCount: 0 };
+    const sum = list.reduce((s, r) => s + (r.rating || 0), 0);
+    return { avgRating: sum / list.length, reviewsCount: list.length };
+  }, [reviews, id]);
+
+  const showNewBadge = isNew && createdAt && (Date.now() - new Date(createdAt).getTime()) < 7 * 24 * 60 * 60 * 1000;
   const isFavorited = user?.favorites?.includes(id) || false;
 
   const handleFavoriteClick = async (e: React.MouseEvent) => {
@@ -58,52 +78,47 @@ export const CharacterCard = memo(function CharacterCard({ character, onClick }:
       setIsFavoriteLoading(false);
     }
   };
-
-  const handleCardClick = () => {
-    onClick(character);
-  };
+  
+  const TAG_LIMIT = 3; 
+  const visibleTags = tags.slice(0, TAG_LIMIT);
+  const hiddenTagsCount = tags.length - visibleTags.length;
 
   return (
     <div
-      data-card
-      onClick={handleCardClick}
-      className="relative group w-full max-w-sm mx-auto cursor-pointer font-sans focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-black rounded-[28px]"
+      onClick={() => onClick(character)}
+      className="relative group w-full max-w-sm mx-auto cursor-pointer rounded-[28px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+      style={{
+        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.2)",
+        WebkitTapHighlightColor: "transparent",
+      }}
       tabIndex={0}
-      style={{ fontFamily: "'Roboto', sans-serif" }}
     >
       <div
-        className="relative overflow-hidden rounded-[28px] shadow-lg"
+        className="relative overflow-hidden rounded-[28px] border transition-shadow duration-300 group-hover:shadow-2xl aspect-[3/4]"
         style={{
-          backgroundColor: 'rgba(255, 255, 255, 0.12)',
-          backdropFilter: 'blur(10px)',
-          WebkitBackdropFilter: 'blur(10px)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.1)',
+          backgroundColor: TOKENS.itemBg,
+          borderColor: TOKENS.border,
         }}
       >
         <img
           src={photo}
           alt={name}
-          data-cover
           loading="lazy"
-          decoding="async"
-          className="w-full h-full object-cover absolute inset-0 z-0 rounded-[28px]"
+          className="w-full h-full object-cover absolute inset-0 z-0"
         />
 
-        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent z-10 rounded-b-[28px]" />
-        <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-black/50 to-transparent z-10 rounded-t-[28px]" />
+        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 to-transparent z-10" />
+        <div className="absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-black/50 to-transparent z-10" />
 
-        <div className="relative z-20 aspect-[3/4] flex flex-col justify-end p-4">
-          <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
-            <div className="flex items-center gap-2 flex-wrap">
-              {isNew && (
-                <div className="flex items-center gap-2 px-3 py-1 rounded-full font-bold text-white shadow-lg backdrop-blur-[8px] bg-white/[0.12]">
-                  <Flame className="w-4 h-4 text-orange-500 fill-orange-500" />
-                  <span>НОВЫЙ</span>
-                </div>
-              )}
+        <div className="relative z-20 h-full flex flex-col justify-between p-4">
+          {/* Top section */}
+          <div className="flex justify-between items-start">
+            <div className="flex flex-wrap items-center gap-2">
+              {showNewBadge && <Badge text="Новый" icon={Flame} variant="accent" />}
               <Badge
-                text={character.reviewCount > 0 ? rating.toFixed(1) : 'Нет оценок'}
-                icon={<Star className="w-4 h-4 text-yellow-300 fill-current" />}
+                text={reviewsCount > 0 ? avgRating.toFixed(2) : 'Нет оценок'}
+                icon={Star}
+                variant="warning"
               />
             </div>
 
@@ -112,56 +127,51 @@ export const CharacterCard = memo(function CharacterCard({ character, onClick }:
                 onClick={handleFavoriteClick}
                 disabled={isFavoriteLoading}
                 aria-label={isFavorited ? 'Удалить из избранного' : 'Добавить в избранное'}
-                className={`w-11 h-11 rounded-full flex items-center justify-center shadow-lg transform transition-all duration-300 ease-in-out
-                           hover:scale-110 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-black
-                           backdrop-blur-[10px]
-                           ${isFavorited
-                             ? 'bg-gradient-to-r from-red-500/[0.9] to-pink-500/[0.9] shadow-red-500/30'
-                             : 'bg-white/[0.15]'}
-                           ${isFavoriteLoading ? 'cursor-not-allowed opacity-70' : ''}`}
+                className="w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 ease-in-out hover:scale-110 active:scale-95 backdrop-blur-[10px] border"
+                // ▼▼▼ ИЗМЕНЕНИЕ 2: Стили кнопки "Избранное" ▼▼▼
+                style={{
+                  background: isFavorited ? 'transparent' : 'rgba(255,255,255,0.1)',
+                  borderColor: isFavorited ? TOKENS.accent : TOKENS.border,
+                }}
+                // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ 2 ▲▲▲
               >
                 {isFavoriteLoading ? (
-                  <LoadingSpinner />
+                  <Loader2 className="w-5 h-5 animate-spin text-white" />
                 ) : (
                   <Heart
-                    className={`w-5 h-5 transition-all duration-300 ${isFavorited ? 'text-white' : 'text-gray-200'}`}
-                    fill={isFavorited ? 'currentColor' : 'none'}
-                    strokeWidth={isFavorited ? 0 : 1.5}
+                    className="w-5 h-5 transition-colors duration-300"
+                    // ▼▼▼ ИЗМЕНЕНИЕ 3: Стили самой иконки "Сердце" ▼▼▼
+                    style={{
+                      color: isFavorited ? TOKENS.accent : '#fff',
+                      fill: isFavorited ? TOKENS.accent : 'none',
+                    }}
+                    // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ 3 ▲▲▲
                   />
                 )}
               </button>
             )}
           </div>
 
-          <div className="relative text-white pt-10">
-            <div className="mb-2">
-              <h3 className="text-2xl font-bold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.7)]" style={{ lineHeight: '1.2em' }}>
-                {name}
-              </h3>
-              <p className="text-base font-bold text-white mt-1 [text-shadow:0_2px_4px_rgba(0,0,0,0.7)]" style={{ lineHeight: '1.5em' }}>
-                {occupation}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
-              <Badge
-                text={gender === 'male' ? 'Мужчина' : 'Девушка'}
-                icon={<div className={`w-3 h-3 rounded-full ${gender === 'male' ? 'bg-blue-400' : 'bg-pink-400'}`} />}
-              />
+          {/* Bottom section */}
+          <div className="text-white">
+            <h3 className="text-2xl font-bold">
+              {name}
+            </h3>
+            <p className="font-medium text-white/90 mb-2">
+              {occupation}
+            </p>
+            
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <Badge text={gender === 'male' ? 'Мужчина' : 'Девушка'} />
               <Badge text={ageGroup === 'immortal' ? 'Бессмертный' : getAgeString(age)} />
             </div>
 
-            <div className="flex items-center gap-2 mb-3 overflow-hidden flex-wrap">
-              {tags.slice(0, 2).map((tag) => (
-                <Badge key={tag} text={tag} variant="primary" />
-              ))}
-              {tags.length > 2 && <Badge text={`+${tags.length - 2}`} className="text-gray-300" />}
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              {visibleTags.map((tag) => <Badge key={tag} text={tag} />)}
+              {hiddenTagsCount > 0 && <Badge text={`+${hiddenTagsCount}`} />}
             </div>
-
-            <p
-              className="text-sm text-gray-200 line-clamp-2 leading-relaxed font-medium [text-shadow:0_1px_3px_rgba(0,0,0,0.7)]"
-              style={{ lineHeight: '1.4em' }}
-            >
+            
+            <p className="text-sm text-white/80 italic line-clamp-3 leading-relaxed">
               {description}
             </p>
           </div>

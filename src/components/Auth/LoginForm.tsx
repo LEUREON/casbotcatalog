@@ -1,97 +1,164 @@
 // project/src/components/Auth/LoginForm.tsx
+import React, { useMemo, useState } from "react";
+import { X, Mail, User as UserIcon, Lock, Eye, EyeOff, AlertCircle, Loader2 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import ThemedBackground from "../common/ThemedBackground";
+import { useAuth } from "../../contexts/AuthContext";
+import { LoginStatus } from "../../types"; 
 
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { LoginStatus } from '../../types';
-import { motion } from 'framer-motion';
-import { LogIn, User, Lock, Frown } from 'lucide-react';
+const ACCENT = "#f7cfe1";
 
-const NoiseBackground = () => (
-  <div className="fixed inset-0 -z-10 animate-star-pan" style={{
-    backgroundColor: 'var(--color-background)',
-    backgroundImage: `url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23noise)" opacity="0.03"/></svg>')`
-  }}/>
-);
-
-export function LoginForm() {
-  const [identity, setIdentity] = useState('');
-  const [password, setPassword] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, isUserBlocked } = useAuth();
+export const LoginForm: React.FC<{onClose?: () => void; onSuccess?: () => void;}> = ({ onClose }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { login, isUserBlocked } = useAuth(); 
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const next = useMemo(() => {
+    const sp = new URLSearchParams(location.search);
+    return sp.get("next") || "/";
+  }, [location.search]);
+
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPwd, setShowPwd] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const looksLikeEmail = (v: string) => /@/.test(v);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setErrorMessage('');
-
-    const blocked = await isUserBlocked(identity);
-    if (blocked) {
-      setErrorMessage('Ваш аккаунт заблокирован.');
-      setIsSubmitting(false);
+    setError(null);
+    if (!identifier || !password) {
+      setError("Введите логин/почту и пароль");
       return;
     }
+    
+    setLoading(true);
+    
+    // ▼▼▼ ОБНОВЛЕННАЯ ЛОГИКА: Всегда приводим к нижнему регистру ▼▼▼
+    const identityToTry = identifier.toLowerCase();
 
-    const status = await login(identity, password);
-    if (status === LoginStatus.SUCCESS) {
-      navigate('/');
-    } else {
-      setErrorMessage('Неверный логин или пароль.');
+    const blocked = await isUserBlocked(identityToTry); 
+    if (blocked) {
+      setError("Этот аккаунт заблокирован.");
+      setLoading(false);
+      return;
     }
-    setIsSubmitting(false);
+    
+    try {
+      const res = await login(identityToTry, password); 
+      
+      if (res === LoginStatus.SUCCESS) {
+        if (onClose) onClose();
+        else navigate(next);
+      } else {
+         setError("Неверный логин/почта или пароль.");
+      }
+    } catch (err: any) {
+       setError("Неверный логин/почта или пароль.");
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const goRegister = () => {
+    try {
+      navigate("/register");
+    } catch {
+      window.location.hash = "#/register";
+    }
+  };
+
+  const CloseBtn = () => (
+    <button
+      type="button"
+      onClick={() => (onClose ? onClose() : navigate(-1))}
+      aria-label="Закрыть"
+      className="absolute right-2 top-2 p-2 rounded-lg hover:bg-white/10 active:scale-95 transition text-[var(--accent)]"
+    >
+      <X className="w-5 h-5" />
+    </button>
+  );
+
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden">
-        <NoiseBackground />
-        <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="relative z-10 w-full max-w-sm">
-            <div className="glass rounded-3xl border border-border-primary/50 shadow-2xl">
-                <div className="p-8">
-                    <div className="flex flex-col items-center text-center mb-8">
-                        {errorMessage.includes('заблокирован') ? (
-                           <Frown className="h-12 w-12 text-rose-quartz mb-4" />
-                        ) : (
-                          <div className="p-3 bg-surface-primary border border-border-primary rounded-xl mb-4">
-                            <LogIn className="h-6 w-6 text-lavender" />
-                          </div>
-                        )}
-                        <h1 className="text-2xl font-bold text-white">Вход в аккаунт</h1>
-                        <p className="text-text-secondary mt-1">Добро пожаловать!</p>
-                    </div>
-                    
-                    {errorMessage && (
-                        <div className="mb-4 text-center text-rose-quartz bg-rose-quartz/10 p-3 rounded-xl border border-rose-quartz/20 text-sm">
-                            {errorMessage}
-                        </div>
-                    )}
+    <div className="fixed inset-0 z-[999]">
+      <ThemedBackground intensity={0.9} animated />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+      <div className="relative z-10 w-full h-full grid place-items-center p-3">
+        <div className="relative w-full max-w-sm mx-auto rounded-3xl border border-[var(--border)] bg-[var(--panel)] backdrop-blur-xl p-6 shadow-xl">
+          <CloseBtn />
+          <h1 className="text-xl font-semibold text-white mb-2">Вход</h1>
+          <p className="text-sm text-[var(--textSecondary)] mb-4">Логин <span className="opacity-60">или</span> почта + пароль</p>
 
-                    <form onSubmit={handleLogin} className="space-y-4">
-                        <div className="relative">
-                            <User className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-secondary" />
-                            <input type="text" value={identity} onChange={(e) => setIdentity(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-background-primary border border-border-primary rounded-xl text-white placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-lavender transition-all" placeholder="Логин или Email" />
-                        </div>
-
-                        <div className="relative">
-                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-text-secondary" />
-                            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-12 pr-4 py-3 bg-background-primary border border-border-primary rounded-xl text-white placeholder-text-secondary focus:outline-none focus:ring-2 focus:ring-lavender transition-all" placeholder="Пароль" />
-                        </div>
-                        
-                        <button type="submit" disabled={isSubmitting} className="w-full group flex items-center justify-center space-x-2 px-6 py-3 bg-lavender text-background-primary rounded-xl shadow-lg shadow-lavender/20 transition-all disabled:opacity-50 font-bold">
-                            <span>{isSubmitting ? "Вход..." : "Войти"}</span>
-                        </button>
-                    </form>
-                </div>
-
-                <div className="bg-black/20 p-4 text-center rounded-b-3xl border-t border-border-primary">
-                    <p className="text-sm text-text-secondary">
-                        Еще нет аккаунта?{' '}
-                        <Link to="/register" className="font-semibold text-lavender hover:text-white transition-colors">Создать</Link>
-                    </p>
-                </div>
+          {error && (
+            <div className="flex items-start gap-2 text-red-300 bg-red-500/10 border border-red-400/30 rounded-xl p-3 mb-3">
+              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+              <span className="text-sm">{error}</span>
             </div>
-        </motion.div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2 bg-white/[.03] focus-within:bg-white/[.05] transition">
+              <div className="w-9 h-9 rounded-lg border grid place-items-center border-white/15">
+                {looksLikeEmail(identifier) ? <Mail className="w-4 h-4 text-white/80" /> : <UserIcon className="w-4 h-4 text-white/80" />}
+              </div>
+              <input
+                id="identifier"
+                type="text"
+                autoComplete="username email"
+                placeholder="Логин или email"
+                className="bg-transparent outline-none text-white flex-1 placeholder:text-white/40"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+              />
+            </div>
+
+            <div className="flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2 bg-white/[.03] focus-within:bg-white/[.05] transition">
+              <div className="w-9 h-9 rounded-lg border grid place-items-center border-white/15">
+                <Lock className="w-4 h-4 text-white/80" />
+              </div>
+              <input
+                id="password"
+                type={showPwd ? "text" : "password"}
+                autoComplete="current-password"
+                placeholder="••••••••"
+                className="bg-transparent outline-none text-white flex-1 placeholder:text-white/40"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd((v) => !v)}
+                className="p-2 rounded-lg hover:bg-white/10 transition"
+                aria-label={showPwd ? "Скрыть пароль" : "Показать пароль"}
+              >
+                {showPwd ? <EyeOff className="w-4 h-4 text-white/80" /> : <Eye className="w-4 h-4 text-white/80" />}
+              </button>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full h-11 rounded-xl px-4 py-2 font-medium text-black disabled:opacity-70"
+              style={{ background: ACCENT }}
+            >
+              {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Входим…</span> : "Войти"}
+            </button>
+          </form>
+
+          <div className="mt-4 flex items-center justify-center text-sm">
+            <button
+              type="button"
+              onClick={goRegister}
+              className="text-white/80 hover:text-white transition underline-offset-4 hover:underline"
+              aria-label="Перейти к регистрации"
+            >
+              Зарегистрироваться
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
-}
+}; 

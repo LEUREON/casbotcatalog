@@ -35,7 +35,7 @@ export interface Character {
   createdAt: Date;
   createdBy: string;
   tags: string[];
-  links: { label: string; url: string }[];
+  links: CharacterLink[]; 
   dominantColor?: string;
 }
 
@@ -51,23 +51,10 @@ export interface Review {
   rating?: number;
   comment: string;
   createdAt: Date;
-  author?: User; 
+  author?: User;
   likesBy?: string[];
   dislikesBy?: string[];
   parentReview?: string;
-} 
-
-export interface CharacterOrder {
-  id: string;
-  userId: string;
-  userName: string;
-  description: string;
-  referenceImage?: string;
-  paymentProof?: string;
-  status: 'pending' | 'processing' | 'completed' | 'rejected';
-  createdAt: Date;
-  adminNotes?: string;
-  customFields?: Record<string, any>;
 }
 
 export interface ShopItem {
@@ -86,15 +73,15 @@ export interface Message {
   id: string;
   userId: string;
   userName: string;
-  subject?: string; // Сделаем необязательным, т.к. только у тикета есть тема
+  subject?: string;
   content: string;
   isReadByAdmin: boolean;
-  isReadByUser: boolean; // Новое поле
+  isReadByUser: boolean;
   createdAt: Date;
   updatedAt: Date;
-  isTicket: boolean; // Новое поле
-  parent?: string; // ID родительского сообщения/тикета
-  files?: string[]; // Массив URL-адресов файлов
+  isTicket: boolean;
+  parent?: string;
+  files?: string[];
   expand?: {
     user_id?: User;
   };
@@ -105,9 +92,9 @@ export interface Notification {
   recipientId: string;
   senderId: string;
   senderName: string;
-  // ▼▼▼ ИЗМЕНЕНИЕ: Добавляем 'support_reply' ▼▼▼
-  type: 'reply' | 'status_change' | 'admin_reply' | 'new_order' | 'new_message' | 'new_user_character' | 'like' | 'broadcast' | 'support_reply';
-  entityId: string; // Будет ID тикета (parent)
+  // ▼▼▼ ИЗМЕНЕНИЕ: Добавлен тип 'dislike' ▼▼▼
+  type: 'reply' | 'status_change' | 'admin_reply' | 'new_message' | 'new_user_character' | 'like' | 'broadcast' | 'support_reply' | 'dislike';
+  entityId: string;
   message?: string;
   isRead: boolean;
   createdAt: Date;
@@ -132,4 +119,27 @@ export interface FilterState {
   gender: 'all' | 'male' | 'female';
   ageGroup: 'all' | '18+' | '45+' | 'immortal';
   sortBy: 'rating' | 'newest' | 'name';
+}
+
+export interface LinkPreset {
+  id: string;
+  name: string;
+  default_label: string;
+  icon: string; 
+  default_color: string;
+  default_text_color: string;
+}
+
+export interface CharacterLink {
+  id: string; 
+  character_id: string;
+  preset_id: string;
+  url: string;
+  custom_label?: string;
+  custom_color?: string;
+  caption?: string; 
+  custom_text_color?: string; 
+  expand?: {
+    preset_id?: LinkPreset;
+  };
 }
