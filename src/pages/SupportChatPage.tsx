@@ -4,11 +4,17 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { Message } from '../types';
-import { Send, Paperclip, PlusCircle, ArrowLeft, Image as ImageIcon, File as FileIcon, X } from 'lucide-react';
+import { Send, Paperclip, PlusCircle, ArrowLeft, Image as ImageIcon, File as FileIcon, X, LifeBuoy } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 
+const TOKENS = {
+  border: "rgba(255,255,255,0.12)",
+  itemBg: "rgba(255,255,255,0.04)",
+  accent: "#f7cfe1",
+};
+
 const FilePreview = ({ file, onRemove }: { file: File, onRemove: () => void }) => (
-    <div className="relative group bg-slate-700/50 p-2 rounded-lg flex items-center space-x-2">
+    <div className="relative group bg-slate-700/50 p-2 rounded-lg flex items-center space-x-2 border" style={{borderColor: TOKENS.border}}>
         {file.type.startsWith('image/') ? <ImageIcon className="h-5 w-5 text-slate-400"/> : <FileIcon className="h-5 w-5 text-slate-400"/>}
         <span className="text-xs text-slate-300 truncate">{file.name}</span>
         <button onClick={onRemove} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -19,7 +25,7 @@ const FilePreview = ({ file, onRemove }: { file: File, onRemove: () => void }) =
 
 const MessageBubble = ({ msg, isOwn }: { msg: Message, isOwn: boolean }) => (
     <div className={`flex w-full ${isOwn ? 'justify-end' : 'justify-start'}`}>
-        <div className={`max-w-md p-3 rounded-2xl ${isOwn ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-700 text-slate-200 rounded-bl-none'}`}>
+        <div className={`max-w-md p-3 rounded-2xl ${isOwn ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-slate-700/80 text-slate-200 rounded-bl-none'}`}>
             <p className="text-sm font-semibold">{isOwn ? "Вы" : msg.userName}</p>
             <p className="text-sm mt-1 whitespace-pre-wrap break-words">{msg.content}</p>
             {msg.files && msg.files.length > 0 && (
@@ -31,7 +37,7 @@ const MessageBubble = ({ msg, isOwn }: { msg: Message, isOwn: boolean }) => (
                     ))}
                 </div>
             )}
-            <p className={`text-xs mt-2 ${isOwn ? 'text-blue-200' : 'text-slate-400'} text-right`}>{new Date(msg.createdAt).toLocaleTimeString()}</p>
+            <p className={`text-xs mt-2 ${isOwn ? 'text-indigo-200' : 'text-slate-400'} text-right`}>{new Date(msg.createdAt).toLocaleTimeString()}</p>
         </div>
     </div>
 );
@@ -76,7 +82,7 @@ function TicketView({ ticket, onBack }: { ticket: Message, onBack: () => void })
                 <button onClick={onBack} className="p-2 hover:bg-white/10 rounded-full"><ArrowLeft /></button>
                 <div className="min-w-0">
                     <h2 className="text-lg font-bold text-white truncate">{ticket.subject}</h2>
-                    <p className="text-xs text-slate-400">Тикет #{ticket.id.slice(-6)}</p>
+                    <p className="text-xs text-slate-300">Тикет #{ticket.id.slice(-6)}</p>
                 </div>
             </div>
             <div className="flex-1 p-4 space-y-4 overflow-y-auto custom-scrollbar">
@@ -91,9 +97,9 @@ function TicketView({ ticket, onBack }: { ticket: Message, onBack: () => void })
                 )}
                 <div className="flex items-center space-x-2">
                     <input type="file" multiple id="file-input" className="hidden" onChange={e => setFiles(f => [...f, ...Array.from(e.target.files || [])])} />
-                    <label htmlFor="file-input" className="p-3 bg-slate-700/50 rounded-full cursor-pointer hover:bg-slate-600/50"><Paperclip /></label>
-                    <input type="text" value={replyContent} onChange={e => setReplyContent(e.target.value)} placeholder="Напишите ответ..." className="w-full px-4 py-3 glass rounded-full text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
-                    <button onClick={handleReply} className="p-3 bg-blue-600 rounded-full text-white hover:bg-blue-500 transition-colors"><Send /></button>
+                    <label htmlFor="file-input" className="p-3 bg-slate-700/50 rounded-full cursor-pointer hover:bg-slate-600/50 border" style={{borderColor: TOKENS.border}}><Paperclip /></label>
+                    <input type="text" value={replyContent} onChange={e => setReplyContent(e.target.value)} placeholder="Напишите ответ..." className="w-full px-4 py-3 rounded-full text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50 border bg-black/20" style={{borderColor: TOKENS.border}}/>
+                    <button onClick={handleReply} className="p-3 rounded-full text-black" style={{background: TOKENS.accent}}><Send /></button>
                 </div>
             </div>
         </div>
@@ -124,14 +130,14 @@ function NewTicketView({ onBack }: { onBack: () => void }) {
             <button onClick={onBack} className="flex items-center space-x-2 text-slate-300 hover:text-white mb-4"><ArrowLeft size={18}/><span>Назад</span></button>
             <h2 className="text-2xl font-bold text-white mb-4">Новый тикет</h2>
             <div className="space-y-4">
-                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Тема обращения" className="w-full px-4 py-3 glass rounded-xl"/>
-                <textarea value={content} onChange={e => setContent(e.target.value)} rows={8} placeholder="Опишите вашу проблему..." className="w-full px-4 py-3 glass rounded-xl resize-none"/>
+                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Тема обращения" className="w-full px-4 py-3 rounded-xl border bg-black/20 focus:ring-2 focus:ring-[var(--accent)]/50 outline-none" style={{borderColor: TOKENS.border}}/>
+                <textarea value={content} onChange={e => setContent(e.target.value)} rows={8} placeholder="Опишите вашу проблему..." className="w-full px-4 py-3 rounded-xl resize-none border bg-black/20 focus:ring-2 focus:ring-[var(--accent)]/50 outline-none" style={{borderColor: TOKENS.border}}/>
                 <div className="flex items-center justify-between">
                     <label htmlFor="new-file-input" className="flex items-center space-x-2 cursor-pointer text-cyan-400 hover:text-cyan-300">
                         <Paperclip size={18}/><span>Прикрепить файлы ({files.length})</span>
                     </label>
                     <input type="file" multiple id="new-file-input" className="hidden" onChange={e => setFiles(f => [...f, ...Array.from(e.target.files || [])])} />
-                    <button onClick={handleSubmit} className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-500 transition-colors">Отправить</button>
+                    <button onClick={handleSubmit} className="px-5 py-2.5 rounded-xl font-semibold text-black" style={{background: TOKENS.accent}}>Отправить</button>
                 </div>
             </div>
         </div>
@@ -182,33 +188,50 @@ export function SupportChatPage() {
   };
   
   if (activeTicket) {
-      return <div className="max-w-4xl mx-auto glass rounded-3xl border border-white/10 overflow-hidden h-[80vh]"><TicketView ticket={activeTicket} onBack={() => setActiveTicket(null)} /></div>
+      return <div className="max-w-4xl mx-auto rounded-3xl border overflow-hidden h-[85vh]" style={{borderColor: TOKENS.border, background: "rgba(255,255,255,0.04)"}}><TicketView ticket={activeTicket} onBack={() => setActiveTicket(null)} /></div>
   }
   
   if (isCreating) {
-      return <div className="max-w-4xl mx-auto glass rounded-3xl border border-white/10"><NewTicketView onBack={() => setIsCreating(false)} /></div>
+      return <div className="max-w-4xl mx-auto rounded-3xl border" style={{borderColor: TOKENS.border, background: "rgba(255,255,255,0.04)"}}><NewTicketView onBack={() => setIsCreating(false)} /></div>
   }
 
   return (
-    <div className="min-h-screen p-4 lg:p-8">
+    <div className="min-h-screen p-2 sm:p-4">
         <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-bold text-white">Мои обращения</h1>
-                <button onClick={() => setIsCreating(true)} className="flex items-center space-x-2 px-5 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-500 transition-colors">
+            <div className="mb-6">
+                <div className="relative glass rounded-3xl p-6 border border-cyan-400/20">
+                    <div className="flex items-center space-x-4">
+                        <div className="relative p-4 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-2xl border border-white/20 shadow-lg">
+                            <LifeBuoy className="h-8 w-8 text-white" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold text-white mb-1">Поддержка</h1>
+                            <p className="text-slate-400">Мои обращения</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mb-4">
+                <button onClick={() => setIsCreating(true)} className="w-full flex items-center justify-center space-x-2 px-5 py-3 rounded-xl font-semibold text-black" style={{background: TOKENS.accent}}>
                     <PlusCircle size={18} />
-                    <span>Создать тикет</span>
+                    <span>Создать новый тикет</span>
                 </button>
             </div>
-            <div className="glass rounded-2xl border border-white/10 p-4 space-y-3">
-                {userTickets.length > 0 ? userTickets.map(ticket => (
-                    <div key={ticket.id} onClick={() => setActiveTicket(ticket)} className="glass-light p-4 rounded-xl cursor-pointer hover:bg-white/5 flex justify-between items-center">
+
+            <div className="rounded-2xl border p-3 space-y-3" style={{borderColor: TOKENS.border, background: "rgba(255,255,255,0.03)"}}>
+                {userTickets.length > 0 ? userTickets.map(ticket => {
+                  const isUnread = hasUnreadReplies(ticket);
+                  return (
+                    <div key={ticket.id} onClick={() => setActiveTicket(ticket)} className="p-4 rounded-xl cursor-pointer hover:bg-white/5 flex justify-between items-center border" style={{borderColor: isUnread ? TOKENS.accent : TOKENS.border, background: TOKENS.itemBg}}>
                         <div className="min-w-0">
                             <p className="font-semibold text-white truncate max-w-xs sm:max-w-md">{ticket.subject}</p>
-                            <p className="text-xs text-slate-400">Тикет #{ticket.id.slice(-6)} • Активность: {new Date(ticket.lastActivity).toLocaleString()}</p>
+                            <p className="text-xs text-white">Тикет #{ticket.id.slice(-6)} • Активность: {new Date(ticket.lastActivity).toLocaleString()}</p>
                         </div>
-                        {hasUnreadReplies(ticket) && <div className="w-3 h-3 bg-cyan-400 rounded-full animate-pulse flex-shrink-0"></div>}
+                        {isUnread && <div className="w-2.5 h-2.5 bg-pink-400 rounded-full animate-pulse flex-shrink-0 ml-4"></div>}
                     </div>
-                )) : (
+                  )
+                }) : (
                     <div className="text-center text-slate-400 py-8">
                         <p>У вас еще нет обращений.</p>
                     </div>

@@ -1,12 +1,20 @@
 // project/src/pages/NotificationsPage.tsx
 
 import React, { useEffect, useState } from 'react';
-import { Bell, MessageSquare, UserCheck, Mail, Bot, UserPlus, XCircle, ThumbsUp } from 'lucide-react';
+// ▼▼▼ ИЗМЕНЕНИЕ 1: Импортируем ThumbsDown ▼▼▼
+import { Bell, MessageSquare, UserCheck, Mail, Bot, UserPlus, XCircle, ThumbsUp, ThumbsDown } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Notification, Newsletter } from '../types';
+
+const TOKENS = {
+  border: "rgba(255,255,255,0.12)",
+  itemBg: "rgba(255,255,255,0.04)",
+  itemBgActive: "rgba(255,255,255,0.10)",
+  accent: "#f7cfe1",
+};
 
 type CombinedItem = (Notification | Newsletter) & { itemType: 'notification' | 'newsletter' };
 
@@ -20,9 +28,12 @@ const getNotificationIcon = (type: Notification['type']) => {
         case 'new_user_character': return <UserPlus className="h-5 w-5 text-teal-400" />;
         case 'like': return <ThumbsUp className="h-5 w-5 text-green-400" />;
         case 'support_reply': return <Mail className="h-5 w-5 text-purple-400" />;
+        // ▼▼▼ ИЗМЕНЕНИЕ 2: Добавляем case для 'dislike' ▼▼▼
+        case 'dislike': return <ThumbsDown className="h-5 w-5 text-red-400" />; 
         default: return <Bell className="h-5 w-5 text-slate-400" />;
     }
 }
+// ▲▲▲ КОНЕЦ ИЗМЕНЕНИЙ ▲▲▲
 
 export function NotificationsPage() {
     const { user, isAdmin } = useAuth();
@@ -51,9 +62,11 @@ export function NotificationsPage() {
                 }
             }
             
-            if (item.type === 'reply' || item.type === 'status_change' || item.type === 'like') {
+            // ▼▼▼ ИЗМЕНЕНИЕ 3: Добавляем 'dislike' в условие перехода на страницу персонажа ▼▼▼
+            if (item.type === 'reply' || item.type === 'status_change' || item.type === 'like' || item.type === 'dislike') {
                 navigate(`/characters/${item.entityId}`);
             }
+            // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ 3 ▲▲▲
             
             if (item.type === 'support_reply') {
                  navigate('/support', { state: { ticketId: item.entityId } });
@@ -72,15 +85,15 @@ export function NotificationsPage() {
 
     return (
         <>
-            <div className="min-h-screen p-4 lg:p-8">
-              <div className="mb-8">
-                  <div className="relative glass rounded-3xl p-6 lg:p-8 border border-yellow-500/20 shadow-2xl">
+            <div className="min-h-screen p-2 sm:p-4">
+              <div className="mb-6">
+                  <div className="relative glass rounded-3xl p-6 border border-yellow-500/20">
                       <div className="flex items-center space-x-4">
-                          <div className="relative p-4 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl border border-white/20 shadow-2xl">
+                          <div className="relative p-4 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl border border-white/20 shadow-lg">
                               <Bell className="h-8 w-8 text-white" />
                           </div>
                           <div>
-                              <h1 className="text-3xl lg:text-4xl font-bold text-white mb-1">
+                              <h1 className="text-3xl font-bold text-white mb-1">
                                   Уведомления
                               </h1>
                               <p className="text-slate-400">
@@ -93,22 +106,24 @@ export function NotificationsPage() {
 
               <div className="max-w-2xl mx-auto space-y-3">
                   {combinedList.length > 0 ? (
-                      combinedList.map(item => (
+                      combinedList.map(item => {
+                        const isUnread = item.itemType === 'notification' && !item.isRead;
+                        return (
                           <motion.div
                               key={`${item.itemType}-${item.id}`}
                               initial={{ opacity: 0, y: 10 }}
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.1 }}
                               onClick={() => handleItemClick(item)}
-                              className={`relative glass-light rounded-xl p-4 border transition-all cursor-pointer hover:bg-white/5 ${
-                                  item.itemType === 'notification' && !item.isRead ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-white/10'
-                              }`}
+                              className="relative rounded-2xl p-4 border transition-all duration-300 cursor-pointer"
+                              style={{
+                                background: isUnread ? TOKENS.itemBgActive : TOKENS.itemBg,
+                                borderColor: isUnread ? TOKENS.accent : TOKENS.border,
+                                boxShadow: isUnread ? `inset 0 0 0 1px ${TOKENS.accent}` : 'none',
+                              }}
                           >
-                              {item.itemType === 'notification' && !item.isRead && (
-                                  <div className="absolute top-3 right-3 w-2.5 h-2.5 bg-cyan-400 rounded-full"></div>
-                              )}
                               <div className="flex items-start space-x-4">
-                                  <div className="p-2 bg-slate-800/50 rounded-full mt-1">
+                                  <div className="p-2 bg-black/20 rounded-full mt-1 border" style={{ borderColor: TOKENS.border }}>
                                       {item.itemType === 'notification' ? getNotificationIcon(item.type) : <Mail className="h-5 w-5 text-amber-400" />}
                                   </div>
                                   <div>
@@ -127,9 +142,13 @@ export function NotificationsPage() {
                                   </div>
                               </div>
                           </motion.div>
-                      ))
+                        )
+                      })
                   ) : (
-                      <div className="text-center py-16 glass rounded-2xl">
+                      <div 
+                        className="text-center py-16 rounded-3xl border"
+                        style={{ borderColor: TOKENS.border, background: "rgba(255,255,255,0.03)"}}
+                      >
                           <Bell className="h-16 w-16 text-slate-500 mx-auto mb-4" />
                           <h3 className="text-xl font-bold text-white">Здесь пока пусто</h3>
                           <p className="text-slate-400">Новые уведомления будут появляться тут.</p>
@@ -145,7 +164,11 @@ export function NotificationsPage() {
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         onClick={(e) => e.stopPropagation()}
-                        className="glass max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl border border-white/20"
+                        className="max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-3xl border"
+                        style={{
+                            background: TOKENS.itemBg,
+                            borderColor: TOKENS.border,
+                        }}
                     >
                         {selectedItem.image && <img src={selectedItem.image} alt={selectedItem.title} className="w-full h-64 object-cover" />}
                         <div className="p-6">
@@ -168,4 +191,4 @@ export function NotificationsPage() {
             )}
         </>
     );
-}
+} 

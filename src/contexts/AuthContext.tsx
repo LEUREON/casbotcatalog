@@ -52,34 +52,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  // ▼▼▼ ИЗМЕНЕНИЕ: Вход всегда в нижнем регистре ▼▼▼
   const login = async (identity: string, pass: string): Promise<LoginStatus> => {
     try {
-      await pb.collection('users').authWithPassword(identity, pass);
+      const identityToTry = identity.toLowerCase(); // Приводим к нижнему регистру
+      await pb.collection('users').authWithPassword(identityToTry, pass);
       return LoginStatus.SUCCESS;
     } catch (err) {
       return LoginStatus.WRONG_CREDENTIALS;
     }
   };
 
+  // ▼▼▼ ИЗМЕНЕНИЕ: Регистрация всегда в нижнем регистре ▼▼▼
   const register = async (username: string, nickname: string, email: string, pass: string): Promise<{ success: boolean; message: string }> => {
     try {
       await pb.collection('users').create({
-        username,
-        email,
-        nickname,
+        username: username.toLowerCase(), // Сохраняем в нижнем регистре
+        email: email.toLowerCase(), // Сохраняем в нижнем регистре
+        nickname: nickname,
         password: pass,
         passwordConfirm: pass,
         role: 'user',
       });
-      await login(username, pass);
+      // Авто-вход с данными в нижнем регистре
+      await login(username.toLowerCase(), pass); 
       return { success: true, message: 'Регистрация успешна!' };
     } catch (err: any) {
-      const responseData = err.response?.data || {};
-      if (responseData.username) return { success: false, message: 'Пользователь с таким логином уже существует.' };
-      if (responseData.email) return { success: false, message: 'Пользователь с такой почтой уже существует.' };
+      console.error("Register error:", err.response);
+      const data = err.response?.data || {};
+      
+      if (data?.username?.message?.includes('must be unique')) {
+           return { success: false, message: 'Этот логин уже зарегистрирован.' };
+      }
+      if (data?.email?.message?.includes('must be unique')) {
+           return { success: false, message: 'Эта почта уже зарегистрирована.' };
+      }
+      if (data?.nickname?.message?.includes('must be unique')) {
+           return { success: false, message: 'Этот никнейм уже занят.' };
+      }
       return { success: false, message: 'Неизвестная ошибка регистрации.' };
     }
   };
+  // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЙ ▲▲▲
 
   const logout = () => {
     pb.authStore.clear();
@@ -91,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const formData = new FormData();
       if (updates.nickname && updates.nickname !== user.nickname) formData.append('nickname', updates.nickname);
-      if (updates.email && updates.email !== user.email) formData.append('email', updates.email);
+      if (updates.email && updates.email !== user.email) formData.append('email', updates.email.toLowerCase());
       if (updates.password && updates.oldPassword) {
         formData.append('password', updates.password);
         formData.append('passwordConfirm', updates.password);
@@ -126,15 +140,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // ▼▼▼ ИЗМЕНЕНИЕ: Проверка блокировки всегда в нижнем регистре ▼▼▼
   const isUserBlocked = async (identity: string): Promise<boolean> => {
     try {
-      const filter = `username = "${identity}" || email = "${identity}"`;
+      const identityToTry = identity.toLowerCase();
+      const filter = `username = "${identityToTry}" || email = "${identityToTry}"`;
       const result = await pb.collection('users').getFirstListItem(filter, { '$autoCancel': false });
       return result?.is_blocked || false;
     } catch (error) {
-      return false;
+      return false; 
     }
   };
+  // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЙ ▲▲▲
 
   const isAdmin = user?.role === 'admin';
 
@@ -147,4 +164,4 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
-};
+}; 

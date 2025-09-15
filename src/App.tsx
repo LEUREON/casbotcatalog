@@ -14,7 +14,6 @@ import { CharacterPage } from './pages/CharacterPage';
 import { RatingPage } from './pages/RatingPage';
 import { AdminPanel } from './pages/AdminPanel';
 import { ProfilePage } from './pages/ProfilePage';
-import { BotOrderPage } from './pages/BotOrderPage';
 import { ShopPage } from './pages/ShopPage';
 import { FavoritesPage } from './pages/FavoritesPage';
 import { SupportChatPage } from './pages/SupportChatPage';
@@ -52,9 +51,7 @@ function AppContent() {
             <Route path="characters/:characterId" element={<CharacterPage />} />
             <Route path="rating" element={<RatingPage />} />
             <Route path="shop" element={<ShopPage />} />
-            
             <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="order-bot" element={<ProtectedRoute><BotOrderPage /></ProtectedRoute>} />
             <Route path="favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
             <Route path="support" element={<ProtectedRoute><SupportChatPage /></ProtectedRoute>} />
             <Route path="notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />

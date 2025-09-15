@@ -1,328 +1,272 @@
+// project/src/components/Admin/AdminShop.tsx
+
 import React, { useState } from 'react';
-import { ShoppingBag, Plus, Edit, Trash2, Save, X, Image, ExternalLink } from 'lucide-react';
+import { ShoppingBag, Plus, Edit, Trash2, Save, X, Loader2 } from 'lucide-react';
 import { useData } from '../../contexts/DataContext';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ShopItem } from '../../types';
 
+// --- Стили ---
+const ACCENT = "#f7cfe1";
+const BORDER = "rgba(255,255,255,0.10)";
+
+function surfaceStyle({
+  elevated = false,
+}: { elevated?: boolean } = {}) {
+  const baseAlpha = elevated ? 0.09 : 0.07;
+  return {
+    background: `rgba(255,255,255,${baseAlpha})`,
+    border: `1px solid ${BORDER}`,
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+  } as React.CSSProperties;
+}
+
+const INPUT_CLS = "w-full rounded-xl px-4 py-2.5 bg-black/[.15] border border-white/15 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50";
+const SELECT_CLS = INPUT_CLS + " pr-10 appearance-none";
+const TEXTAREA_CLS = INPUT_CLS + " min-h-[100px] resize-y";
+const FILE_INPUT_CLS = "w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20";
+
+// --- Тип для состояния формы ---
+type FormState = {
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  isActive: boolean;
+  imageFile: File | null;
+  actionButtons: string; // Храним JSON как строку для textarea
+};
+
+const defaultFormState: FormState = {
+  name: '',
+  description: '',
+  price: 0,
+  category: '',
+  isActive: true,
+  imageFile: null,
+  actionButtons: '[]',
+};
+
+// --- Основной компонент ---
 export function AdminShop() {
   const { shopItems, addShopItem, updateShopItem, deleteShopItem } = useData();
   const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [formData, setFormData] = useState<Partial<ShopItem>>({
-    name: '',
-    description: '',
-    price: 0,
-    image: '',
-    category: '',
-    isActive: true,
-    actionButtons: []
-  });
+  const [formData, setFormData] = useState<FormState>(defaultFormState);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const handleEdit = (item: ShopItem) => {
-    setEditingItem(item);
-    setFormData(item);
-    setShowAddForm(true);
-  };
+  const clearMessage = () => setTimeout(() => setMessage(null), 4000);
 
-  const handleSave = () => {
-    if (!formData.name || !formData.description) return;
-
-    const itemData = {
-      ...formData,
-      price: formData.price || 0,
-      isActive: formData.isActive !== false,
-      actionButtons: formData.actionButtons || []
-    } as Omit<ShopItem, 'id' | 'createdAt'>;
-
-    if (editingItem) {
-      updateShopItem(editingItem.id, itemData);
-    } else {
-      addShopItem(itemData);
-    }
-
-    handleCancel();
-  };
+  // --- Обработчики ---
 
   const handleCancel = () => {
     setEditingItem(null);
+    setFormData(defaultFormState);
     setShowAddForm(false);
-    setFormData({
-      name: '',
-      description: '',
-      price: 0,
-      image: '',
-      category: '',
-      isActive: true,
-      actionButtons: []
-    });
+    setMessage(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleEdit = (item: ShopItem) => {
+    setEditingItem(item);
+    setFormData({
+      name: item.name,
+      description: item.description,
+      price: item.price,
+      category: item.category,
+      isActive: item.isActive,
+      imageFile: null, // Файл сбрасывается, загружаем новый только при необходимости
+      actionButtons: JSON.stringify(item.actionButtons || []), // Конвертируем массив в JSON-строку
+    });
+    setShowAddForm(true);
+    setMessage(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = async (id: string) => {
     if (confirm('Вы уверены, что хотите удалить этот товар?')) {
-      deleteShopItem(id);
+      await deleteShopItem(id);
+      setMessage({ type: 'success', text: 'Товар удален.' });
+      clearMessage();
     }
   };
 
-  const addActionButton = () => {
-    const buttons = formData.actionButtons || [];
-    setFormData({
-      ...formData,
-      actionButtons: [...buttons, { label: '', url: '' }]
-    });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.name || !formData.category) {
+        setMessage({ type: 'error', text: 'Название и категория обязательны.' });
+        clearMessage();
+        return;
+    }
+    
+    setIsSubmitting(true);
+    setMessage(null);
+
+    const data = new FormData();
+    data.append('name', formData.name);
+    data.append('description', formData.description);
+    data.append('price', String(formData.price));
+    data.append('category', formData.category);
+    data.append('isActive', String(formData.isActive));
+    data.append('actionButtons', formData.actionButtons); // Отправляем JSON как строку
+
+    if (formData.imageFile) {
+        data.append('image', formData.imageFile);
+    }
+
+    try {
+      if (editingItem) {
+        await updateShopItem(editingItem.id, data);
+        setMessage({ type: 'success', text: 'Товар успешно обновлен!' });
+      } else {
+        await addShopItem(data);
+        setMessage({ type: 'success', text: 'Товар успешно создан!' });
+      }
+      handleCancel();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: `Ошибка: ${err.message || 'Не удалось сохранить товар.'}` });
+    } finally {
+      setIsSubmitting(false);
+      clearMessage();
+    }
   };
 
-  const updateActionButton = (index: number, field: 'label' | 'url', value: string) => {
-    const buttons = formData.actionButtons || [];
-    const updatedButtons = buttons.map((button, i) => 
-      i === index ? { ...button, [field]: value } : button
-    );
-    setFormData({
-      ...formData,
-      actionButtons: updatedButtons
-    });
-  };
-
-  const removeActionButton = (index: number) => {
-    const buttons = formData.actionButtons || [];
-    setFormData({
-      ...formData,
-      actionButtons: buttons.filter((_, i) => i !== index)
-    });
-  };
+  // --- JSX ---
 
   return (
-    <div className="p-6">
+    <div className="p-4 sm:p-6">
+      {/* Заголовок и кнопка "Добавить" */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-white">Управление магазином</h2>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl hover:from-pink-600 hover:to-rose-600 transition-all"
+        <h2 className="text-xl sm:text-2xl font-bold text-white">Управление магазином</h2>
+        <button 
+          onClick={() => { handleCancel(); setShowAddForm(true); }} 
+          className="flex items-center space-x-2 px-4 py-2 rounded-xl font-medium text-black" 
+          style={{ background: ACCENT }}
         >
           <Plus className="h-4 w-4" />
           <span>Добавить товар</span>
         </button>
       </div>
 
-      {/* Add/Edit Form */}
-      {showAddForm && (
-        <div className="glass-light rounded-2xl p-6 mb-6 border border-pink-500/20">
-          <h3 className="text-xl font-bold text-white mb-4">
-            {editingItem ? 'Редактировать товар' : 'Добавить товар'}
-          </h3>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">Название</label>
-                <input
-                  type="text"
-                  value={formData.name || ''}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-4 py-3 glass rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500/50"
-                  placeholder="Введите название товара"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">Описание</label>
-                <textarea
-                  value={formData.description || ''}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={4}
-                  className="w-full px-4 py-3 glass rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500/50 resize-none"
-                  placeholder="Описание товара"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">URL изображения</label>
-                <div className="flex space-x-2">
-                  <input
-                    type="url"
-                    value={formData.image || ''}
-                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
-                    className="flex-1 px-4 py-3 glass rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500/50"
-                    placeholder="https://example.com/image.jpg"
-                  />
-                  <button className="p-3 glass rounded-xl text-pink-400 hover:text-white transition-colors">
-                    <Image className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">Цена</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formData.price || 0}
-                  onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-                  className="w-full px-4 py-3 glass rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-pink-500/50"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">Категория</label>
-                <input
-                  type="text"
-                  value={formData.category || ''}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-4 py-3 glass rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500/50"
-                  placeholder="Категория товара"
-                />
-              </div>
-
-              <div>
-                <label className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive !== false}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                    className="rounded"
-                  />
-                  <span className="text-white">Активный товар</span>
-                </label>
-              </div>
-
-              {/* Action Buttons */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-white">Кнопки действий</label>
-                  <button
-                    type="button"
-                    onClick={addActionButton}
-                    className="text-sm text-pink-400 hover:text-white transition-colors"
-                  >
-                    + Добавить кнопку
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {formData.actionButtons?.map((button, index) => (
-                    <div key={index} className="flex space-x-2">
-                      <input
-                        type="text"
-                        placeholder="Текст кнопки"
-                        value={button.label}
-                        onChange={(e) => updateActionButton(index, 'label', e.target.value)}
-                        className="flex-1 px-3 py-2 glass rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500/50 text-sm"
-                      />
-                      <input
-                        type="url"
-                        placeholder="https://example.com"
-                        value={button.url}
-                        onChange={(e) => updateActionButton(index, 'url', e.target.value)}
-                        className="flex-1 px-3 py-2 glass rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pink-500/50 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeActionButton(index)}
-                        className="p-2 text-red-400 hover:text-red-300 transition-colors"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex space-x-4 mt-6">
-            <button
-              onClick={handleSave}
-              className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all"
-            >
-              <Save className="h-4 w-4" />
-              <span>Сохранить</span>
-            </button>
-            <button
-              onClick={handleCancel}
-              className="flex items-center space-x-2 px-6 py-3 glass text-slate-300 hover:text-white rounded-xl transition-all"
-            >
-              <X className="h-4 w-4" />
-              <span>Отмена</span>
-            </button>
-          </div>
+      {message && (
+        <div className={`mb-4 p-3 rounded-xl border text-sm ${message.type === 'success' ? 'bg-green-500/20 border-green-500/30 text-green-300' : 'bg-red-500/20 border-red-500/30 text-red-300'}`}>
+          {message.text}
         </div>
       )}
 
-      {/* Shop Items List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {shopItems.length > 0 ? (
-          shopItems.map((item) => (
-            <div key={item.id} className="glass-light rounded-2xl p-4 border border-white/10">
-              {item.image && (
-                <img
-                  src={item.image}
-                  alt={item.name}
-                  className="w-full h-32 object-cover rounded-xl mb-4"
-                />
-              )}
+      {/* Форма добавления/редактирования */}
+      <AnimatePresence>
+        {showAddForm && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="rounded-2xl mb-6 overflow-hidden" 
+            style={surfaceStyle({ elevated: true })}
+          >
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6">
+              <h3 className="text-xl font-bold text-white mb-4">{editingItem ? 'Редактировать' : 'Добавить'} товар</h3>
               
-              <div className="space-y-2">
-                <div className="flex items-start justify-between">
-                  <h3 className="font-bold text-white">{item.name}</h3>
-                  {!item.isActive && (
-                    <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded-lg text-xs font-bold">
-                      НЕАКТИВЕН
-                    </span>
-                  )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Название */}
+                <div>
+                  <label className="block text-sm mb-2">Название</label>
+                  <input type="text" value={formData.name} onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))} className={INPUT_CLS} required />
                 </div>
-                
-                <p className="text-slate-400 text-sm line-clamp-2">{item.description}</p>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-green-400">${item.price}</span>
-                  <span className="text-sm text-slate-400">{item.category}</span>
+                {/* Категория */}
+                <div>
+                  <label className="block text-sm mb-2">Категория</label>
+                  <input type="text" value={formData.category} onChange={(e) => setFormData(f => ({ ...f, category: e.target.value }))} className={INPUT_CLS} placeholder="Например: Промокод" required />
                 </div>
-
-                {/* Action Buttons Preview */}
-                {item.actionButtons && item.actionButtons.length > 0 && (
-                  <div className="space-y-1 pt-2 border-t border-white/10">
-                    <h4 className="text-xs font-medium text-slate-400">Кнопки действий:</h4>
-                    {item.actionButtons.map((button, index) => (
-                      <a
-                        key={index}
-                        href={button.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-1 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
-                      >
-                        <ExternalLink className="h-3 w-3" />
-                        <span className="truncate">{button.label}</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
+                {/* Описание */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm mb-2">Описание</label>
+                  <textarea value={formData.description} onChange={(e) => setFormData(f => ({ ...f, description: e.target.value }))} className={TEXTAREA_CLS} />
+                </div>
+                {/* Цена */}
+                <div>
+                  <label className="block text-sm mb-2">Цена (в рублях)</label>
+                  <input type="number" value={formData.price} onChange={(e) => setFormData(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} className={INPUT_CLS} min={0} />
+                </div>
+                {/* Активность */}
+                <div>
+                  <label className="block text-sm mb-2">Активен</label>
+                  <select value={String(formData.isActive)} onChange={(e) => setFormData(f => ({ ...f, isActive: e.target.value === 'true' }))} className={SELECT_CLS}>
+                    <option value="true">Да (виден в магазине)</option>
+                    <option value="false">Нет (скрыт)</option>
+                  </select>
+                </div>
+                {/* Изображение */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm mb-2">Изображение (оставьте пустым, чтобы не менять)</label>
+                  <input 
+                    type="file" 
+                    onChange={(e) => setFormData(f => ({ ...f, imageFile: e.target.files ? e.target.files[0] : null }))} 
+                    accept="image/*" 
+                    className={FILE_INPUT_CLS}
+                  />
+                </div>
+                 {/* Action Buttons (JSON) */}
+                 <div className="md:col-span-2">
+                  <label className="block text-sm mb-2">Кнопки (JSON массив)</label>
+                  <textarea 
+                    value={formData.actionButtons} 
+                    onChange={(e) => setFormData(f => ({ ...f, actionButtons: e.target.value }))} 
+                    className={TEXTAREA_CLS}
+                    placeholder='[{"label": "Купить", "url": "https://..."}]'
+                  />
+                  <p className="text-xs text-slate-400 mt-1">Введите валидный JSON или оставьте `[]`.</p>
+                </div>
               </div>
-              
-              <div className="flex space-x-2 mt-4">
-                <button
-                  onClick={() => handleEdit(item)}
-                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-all text-sm"
-                >
-                  <Edit className="h-3 w-3" />
-                  <span>Редактировать</span>
+
+              {/* Кнопки формы */}
+              <div className="flex space-x-2 pt-4 mt-4 border-t border-white/10">
+                <button type="submit" disabled={isSubmitting} className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 font-bold text-black" style={{background: ACCENT}}>
+                  {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  <span>{isSubmitting ? 'Сохранение...' : (editingItem ? 'Сохранить' : 'Добавить товар')}</span>
                 </button>
-                <button
-                  onClick={() => handleDelete(item.id)}
-                  className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-all text-sm"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  <span>Удалить</span>
+                <button type="button" onClick={handleCancel} className="px-5 py-3 rounded-xl border" style={{borderColor: BORDER, background: 'rgba(255,255,255,0.05)'}}>
+                  <X size={18} />
                 </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
+      {/* Список товаров */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {shopItems.map((item) => (
+          <div key={item.id} className="rounded-2xl p-4 flex flex-col" style={surfaceStyle()}>
+            <div className="flex items-start gap-4">
+              <img 
+                src={item.image ? item.image : `https://placehold.co/80x80/222/555?text=${item.name.charAt(0)}`} 
+                alt={item.name}
+                className="w-20 h-20 rounded-xl object-cover border" 
+                style={{borderColor: BORDER}}
+              />
+              <div className="min-w-0 flex-1">
+                <span className={`text-xs px-2 py-0.5 rounded ${item.isActive ? 'bg-green-500/20 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
+                  {item.isActive ? 'Активен' : 'Скрыт'}
+                </span>
+                <p className="font-bold text-white truncate mt-1">{item.name}</p>
+                <p className="text-sm text-slate-400">{item.category}</p>
+                <p className="text-lg font-semibold text-white mt-1">{item.price} ₽</p>
               </div>
             </div>
-          ))
-        ) : (
-          <div className="col-span-full text-center py-12">
-            <ShoppingBag className="h-16 w-16 text-slate-400 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">Нет товаров</h3>
-            <p className="text-slate-400">Добавьте первый товар в магазин</p>
+            <div className="flex gap-2 mt-4 pt-4 border-t border-white/10">
+                <button onClick={() => handleEdit(item)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm border" style={{borderColor: BORDER, background: "rgba(255,255,255,0.03)"}}>
+                    <Edit size={16} /> Ред.
+                </button>
+                <button onClick={() => handleDelete(item.id)} className="p-2.5 rounded-xl border text-red-400" style={{borderColor: BORDER, background: "rgba(255,255,255,0.03)"}}>
+                    <Trash2 size={16} />
+                </button>
+            </div>
           </div>
-        )}
+        ))}
       </div>
     </div>
   );

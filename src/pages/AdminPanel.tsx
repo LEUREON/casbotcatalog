@@ -1,122 +1,172 @@
 // project/src/pages/AdminPanel.tsx
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Users,
+  ShoppingBag,
+  MessageSquare,
+  User,
+  File,
+  Mail,
+  Shield,
+} from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
+import { useData } from "../contexts/DataContext";
+import { AdminCharacters } from "../components/Admin/AdminCharacters";
+import { AdminUsers } from "../components/Admin/AdminUsers";
+import { AdminShop } from "../components/Admin/AdminShop";
+import { AdminFiles } from "../components/Admin/AdminFiles";
+import { AdminBroadcast } from "../components/Admin/AdminBroadcast";
 
-import React, { useState, useEffect } from 'react';
-import { Shield, Users, Bot, ShoppingBag, MessageSquare, User, File, UserSquare, Mail } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useData } from '../contexts/DataContext';
-import { AdminCharacters } from '../components/Admin/AdminCharacters';
-import { AdminUsers } from '../components/Admin/AdminUsers';
-import { AdminOrders } from '../components/Admin/AdminOrders';
-import { AdminShop } from '../components/Admin/AdminShop';
-import { AdminSupport } from '../components/Admin/AdminSupport'; // <-- Правильный импорт
-import { AdminFiles } from '../components/Admin/AdminFiles';
-import { AdminUserCharacters } from '../components/Admin/AdminUserCharacters';
-import { AdminBroadcast } from '../components/Admin/AdminBroadcast';
+const ACCENT = "#f7cfe1";
+const BORDER = "rgba(255,255,255,0.10)";
+
+function surfaceStyle({
+  active = false,
+}: { elevated?: boolean; active?: boolean } = {}) {
+  const baseAlpha = 0.07;
+  return {
+    background: `
+      radial-gradient(600px 260px at 0% 0%, rgba(247, 207, 225,0.10), transparent 60%),
+      radial-gradient(600px 260px at 100% 100%, rgba(120,140,255,0.09), transparent 60%),
+      rgba(255,255,255,${baseAlpha})
+    `,
+    border: `1px solid ${active ? ACCENT : BORDER}`,
+    boxShadow: active ? `inset 0 0 0 1px ${ACCENT}` : "none",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+  } as React.CSSProperties;
+}
+
+type TabId =
+  | "characters"
+  | "users"
+  | "shop"
+  | "messages"
+  | "broadcast"
+  | "files";
 
 export function AdminPanel() {
-  const { isAdmin } = useAuth();
-  const { loadUsers, loadOrders, loadShopItems, loadMessages, loadUserCharacters, loadNewsletters } = useData();
+  const navigate = useNavigate();
   const location = useLocation();
-  
-  const [activeTab, setActiveTab] = useState(location.state?.initialTab || 'characters');
+  const { user } = useAuth();
+  const { users, characters } = useData();
+
+  const initialTab = (new URLSearchParams(location.search).get("tab") ||
+    "characters") as TabId;
+  const [active, setActive] = useState<TabId>(initialTab);
 
   useEffect(() => {
-    if (activeTab === 'users' || activeTab === 'files') {
-      loadUsers();
-    }
-    
-    switch (activeTab) {
-      case 'orders': loadOrders(); break;
-      case 'shop': loadShopItems(); break;
-      case 'messages': loadMessages(); break;
-      case 'user-characters': loadUserCharacters(); break;
-      case 'broadcast': loadNewsletters(); break;
-    }
-  }, [activeTab, loadUsers, loadOrders, loadShopItems, loadMessages, loadUserCharacters, loadNewsletters]);
+    const sp = new URLSearchParams(location.search);
+    sp.set("tab", active);
+    navigate({ search: sp.toString() }, { replace: true });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }, [active, location.search, navigate]);
 
-  if (!isAdmin) {
+  const tabs = useMemo(
+    () => [
+      { id: "characters", label: "Персонажи", icon: User },
+      { id: "users", label: "Пользователи", icon: Users },
+      { id: "shop", label: "Магазин", icon: ShoppingBag },
+      { id: "broadcast", label: "Объявления", icon: Mail },
+      { id: "files", label: "Файлы", icon: File },
+    ] as Array<{ id: TabId; label: string; icon: React.ComponentType<any> }>,
+    []
+  );
+
+  const stats = useMemo(
+    () => [
+      { label: "Пользователи", value: users.length, icon: Users },
+      { label: "Персонажи", value: characters.length, icon: User },
+    ],
+    [users.length, characters.length]
+  );
+
+  const renderContent = () => {
+    switch (active) {
+      case "characters":
+        return <AdminCharacters />;
+      case "users":
+        return <AdminUsers />;
+      case "shop":
+        return <AdminShop />;
+      case "messages":
+        return <AdminSupport />;
+      case "broadcast":
+        return <AdminBroadcast />;
+      case "files":
+        return <AdminFiles />;
+      default:
+        return null;
+    }
+  };
+
+  if (user && user.role !== "admin") {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="glass rounded-3xl p-8 border border-red-500/20 text-center">
-            <Shield className="h-16 w-16 text-red-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">Доступ запрещен</h2>
-            <p className="text-slate-400">Только администраторы могут получить доступ к этой странице.</p>
+      <div className="max-w-screen-md mx-auto px-4 py-6">
+        <div className="rounded-2xl p-5" style={surfaceStyle({ elevated: true })}>
+          <p className="text-lg font-semibold">Доступ запрещён</p>
+          <p className="opacity-70 mt-2">
+            Эта страница доступна только администраторам.
+          </p>
         </div>
       </div>
     );
   }
 
-  const tabs = [
-    { id: 'characters', label: 'Персонажи', icon: User, gradient: 'from-purple-500 to-violet-500' },
-    { id: 'user-characters', label: 'Персонажи (польз.)', icon: UserSquare, gradient: 'from-green-500 to-teal-500' },
-    { id: 'users', label: 'Пользователи', icon: Users, gradient: 'from-blue-500 to-cyan-500' },
-    { id: 'orders', label: 'Заказы ботов', icon: Bot, gradient: 'from-green-500 to-emerald-500' },
-    { id: 'shop', label: 'Магазин', icon: ShoppingBag, gradient: 'from-pink-500 to-rose-500' },
-    { id: 'messages', label: 'Поддержка', icon: MessageSquare, gradient: 'from-indigo-500 to-purple-500' },
-    { id: 'broadcast', label: 'Объявления', icon: Mail, gradient: 'from-amber-500 to-orange-500' },
-    { id: 'files', label: 'Файлы', icon: File, gradient: 'from-gray-500 to-slate-500' },
-  ];
-
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'characters': return <AdminCharacters />;
-      case 'user-characters': return <AdminUserCharacters />;
-      case 'users': return <AdminUsers />;
-      case 'orders': return <AdminOrders />;
-      case 'shop': return <AdminShop />;
-      case 'messages': return <AdminSupport />; // <-- Правильный компонент
-      case 'broadcast': return <AdminBroadcast />;
-      case 'files': return <AdminFiles />;
-      default: return <AdminCharacters />;
-    }
-  };
-
   return (
-    <div className="min-h-screen p-4 lg:p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-500/10 via-violet-500/10 to-purple-500/10 rounded-3xl blur-3xl animate-pulse"></div>
-          <div className="relative glass rounded-3xl p-6 lg:p-8 border border-purple-500/20 shadow-2xl">
-            <div className="flex items-center space-x-4">
-              <div className="relative p-4 bg-gradient-to-r from-purple-500 to-violet-500 rounded-2xl border border-white/20 shadow-2xl">
-                <Shield className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl lg:text-4xl font-black bg-gradient-to-r from-white via-purple-200 to-violet-200 bg-clip-text text-transparent mb-2">
-                  Панель администратора
-                </h1>
-                <p className="text-slate-400">Управление контентом и пользователями</p>
-              </div>
-            </div>
+    <div className="max-w-screen-xl mx-auto px-2 sm:px-4 py-4 sm:py-6">
+      <header className="mb-5">
+        <div className="flex items-center gap-3">
+          <div
+            className="size-10 rounded-2xl flex items-center justify-center"
+            style={surfaceStyle()}
+          >
+            <Shield size={18} />
+          </div>
+          <div className="flex-1">
+            <h1 className="font-display text-2xl sm:text-3xl font-semibold leading-tight">
+              Панель администратора
+            </h1>
+            <p className="text-sm opacity-70 mt-0.5">
+              Управляйте контентом, пользователями и сервисом
+            </p>
           </div>
         </div>
-      </div>
-      {/* Tabs */}
-      <div className="mb-8">
-        <div className="glass rounded-2xl p-2 border border-white/10">
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-            {tabs.map((tab) => (
+      </header>
+
+      <nav className="mb-5">
+        {/* Класс 'hidden' удален, 'grid-cols-2' будет применяться на мобильных */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5">
+          {tabs.map(({ id, label, icon: Icon }) => {
+            const activeNow = active === id;
+            return (
               <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`relative p-4 rounded-xl transition-all duration-300 ${activeTab === tab.id ? `bg-gradient-to-r ${tab.gradient} text-white shadow-lg` : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                key={id}
+                onClick={() => setActive(id)}
+                className="group w-full"
               >
-                <div className="relative flex flex-col items-center space-y-2">
-                  <tab.icon className="h-6 w-6" />
-                  <span className="text-sm font-medium text-center">{tab.label}</span>
+                <div
+                  className="w-full rounded-2xl px-3 py-3 flex items-center gap-3"
+                  style={surfaceStyle({ active: activeNow })}
+                >
+                  <div className="rounded-xl p-2 shrink-0" style={surfaceStyle()}>
+                    <Icon size={18} />
+                  </div>
+                  <span className="text-sm font-medium truncate">{label}</span>
                 </div>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      </div>
+      </nav>
 
-      {/* Content */}
-      <div className="glass rounded-3xl border border-white/10 min-h-[600px]">
+      <section
+        className="rounded-3xl overflow-hidden"
+        style={surfaceStyle({ elevated: true })}
+      >
         {renderContent()}
-      </div>
+      </section>
     </div>
   );
 }

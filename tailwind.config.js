@@ -17,6 +17,12 @@ module.exports = {
       },
     },
     extend: {
+      // ▼▼▼ ДОБАВЛЕНО ▼▼▼
+      fontFamily: {
+        display: ['Manrope', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        body: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+      },
+      // ▲▲▲ КОНЕЦ ▲▲▲
       colors: {
         background: "#100e1b",
         surface: "rgba(255,255,255,0.05)",
