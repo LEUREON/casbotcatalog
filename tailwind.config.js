@@ -1,3 +1,4 @@
+// tailwind.config.js
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: ["class"],
@@ -7,29 +8,55 @@ module.exports = {
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
   ],
-  prefix: "",
   theme: {
-    container: {
-      center: true,
-      padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
-    },
     extend: {
-      // ▼▼▼ ДОБАВЛЕНО ▼▼▼
       fontFamily: {
-        display: ['Manrope', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        body: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        heading: 'var(--font-family-heading)',
+        body: 'var(--font-family-body)',
       },
-      // ▲▲▲ КОНЕЦ ▲▲▲
       colors: {
-        background: "#100e1b",
-        surface: "rgba(255,255,255,0.05)",
-        border: "rgba(255,255,255,0.10)",
-        textPrimary: "#ffffff",
-        textSecondary: "#a09cb8",
-        neon: "#caff48",
+        dark: 'var(--bg-dark)',
+        glass: 'var(--bg-glass)',
+        'glass-hover': 'var(--bg-glass-hover)',
+        item: 'var(--bg-item)',
+        reply: 'var(--bg-reply)',
+        'accent-primary': 'var(--accent-primary)',
+        'accent-secondary': 'var(--accent-secondary)',
+        'accent-tertiary': 'var(--accent-tertiary)',
+        'text-primary': 'var(--text-primary)',
+        'text-secondary': 'var(--text-secondary)',
+        'text-muted': 'var(--text-muted)',
+        'badge-male': 'var(--badge-male)',
+        'badge-female': 'var(--badge-female)',
+        'badge-age': 'var(--badge-age)',
+        'badge-immortal': 'var(--badge-immortal)',
+        'badge-tag': 'var(--badge-tag)',
+        'star-filled': 'var(--star-filled)',
+      },
+      borderRadius: {
+        sm: 'var(--radius-sm)',
+        md: 'var(--radius-md)',
+        lg: 'var(--radius-lg)',
+        xl: 'var(--radius-xl)',
+        full: 'var(--radius-full)',
+      },
+      borderColor: {
+        DEFAULT: 'var(--border-color)',
+      },
+      boxShadow: {
+        glass: '0 8px 32px rgba(0, 0, 0, 0.35)',
+        'glass-hover': '0 12px 40px rgba(0, 0, 0, 0.4)',
+        accent: '0 4px 16px rgba(var(--accent-primary-rgb), 0.4)',
+        'star-glow': '0 0 12px rgba(var(--star-glow-rgb), 0.6)',
+        'button-hover': '0 8px 24px rgba(var(--accent-primary-rgb), 0.4)',
+      },
+      // ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ ▼▼▼
+      dropShadow: {
+        'button-glow': '0 0 10px rgba(var(--accent-primary-rgb), 0.7)'
+      },
+      // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
+      transitionTimingFunction: {
+        smooth: 'cubic-bezier(0.25, 0.1, 0.25, 1)',
       },
     },
   },
