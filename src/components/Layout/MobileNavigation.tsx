@@ -1,36 +1,122 @@
 // project/src/components/Layout/MobileNavigation.tsx
-
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion"; 
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion"; 
 import {
   Compass, BarChart2, Heart, Users, Menu as MenuIcon, ShoppingBag, Bell,
   LifeBuoy, Bot, Plus, Settings, LogIn, X, ChevronRight, LogOut, Cat,
-  Send // <-- 1. ИМПОРТИРОВАЛИ ИКОНКУ SEND (TELEGRAM)
+  Send
 } from "lucide-react";
 import IconBase from "../ui/IconBase";
 import { useUnreadTotal } from "../../hooks/useUnreadTotal";
 import ThemedBackground from "../common/ThemedBackground";
 import { useAuth } from "../../contexts/AuthContext";
 
-/* ===== TOKENS ===== */
-const TOKENS = {
-  border: "rgba(255,255,255,0.16)",
-  borderStrong: "rgba(255,255,255,0.34)",
-  itemBg: "rgba(255,255,255,0.06)",
-  itemBgActive: "rgba(255,255,255,0.12)",
-  radius: 20,
-  badgeMax: 99,
-  // нежный розовый
-  accent: "#f7cfe1",
-  accentRgb: "247, 207, 225",
-};
-
+// ✅ Функции ensureAuth и isAdmin перенесены в начало
 const ensureAuth = (user: any, to: string) =>
   !user ? `/login?next=${encodeURIComponent(to)}` : to;
 
 const isAdmin = (user: any) =>
   !!user && (user.isAdmin || user?.role === "admin" || user?.is_staff);
+
+// === 🎨 ЕДИНАЯ ДИЗАЙН-СИСТЕМА (ПОЛНОСТЬЮ СИНХРОНИЗИРОВАНА С CharacterPage.tsx) ===
+const DESIGN = {
+  colors: {
+    text: {
+      primary: "#ffffff",
+      secondary: "#e0e0e0",
+      muted: "#b0b0b0",
+      accent: "#d7aefb",
+    },
+    background: {
+      glass: "rgba(40, 40, 50, 0.65)",
+      glassHover: "rgba(50, 50, 65, 0.8)",
+      floating: "rgba(30, 30, 40, 0.8)",
+      dark: "#121218",
+      item: "rgba(255,255,255,0.04)",
+      reply: "rgba(35, 25, 55, 0.7)",
+    },
+    border: "rgba(255, 255, 255, 0.08)",
+    accent: {
+      primary: "#d7aefb",
+      secondary: "#ff6bd6",
+      tertiary: "#8a75ff",
+      glow: "rgba(215, 174, 251, 0.4)",
+    },
+    star: {
+      filled: "#FFD700",
+      glow: "rgba(255, 215, 0, 0.6)",
+    },
+    badges: {
+      male: "#87cefa",
+      female: "#ffb6c1",
+      age: "#dda0dd",
+      immortal: "#ffd700",
+      tag: "rgba(255, 255, 255, 0.08)",
+    },
+  },
+  spacing: {
+    xs: "4px",
+    sm: "8px",
+    md: "16px",
+    lg: "24px",
+    xl: "32px",
+    xxl: "48px",
+  },
+  radius: {
+    sm: "8px",
+    md: "16px",
+    lg: "24px",
+    xl: "32px",
+    full: "9999px",
+  },
+  shadows: {
+    glass: "0 8px 32px rgba(0, 0, 0, 0.35)",
+    glassHover: "0 12px 40px rgba(0, 0, 0, 0.4)",
+    accent: "0 4px 16px rgba(215, 174, 251, 0.4)",
+    starGlow: "0 0 12px rgba(255, 215, 0, 0.5)",
+    button: "0 6px 20px rgba(255, 107, 214, 0.3)",
+    buttonHover: "0 8px 24px rgba(255, 107, 214, 0.4)",
+  },
+  fonts: {
+    heading: `"Geist", "Inter", system-ui, sans-serif`,
+    body: `"Geist", "Inter", system-ui, sans-serif`,
+  },
+  transitions: {
+    quick: "0.2s ease",
+    smooth: "0.4s cubic-bezier(0.25, 0.1, 0.25, 1)",
+    spring: { type: "spring", stiffness: 400, damping: 25 } as const,
+  },
+};
+
+// === 🎭 АНИМАЦИОННЫЕ ПРЕСЕТЫ (ПОЛНОСТЬЮ СИНХРОНИЗИРОВАНЫ) ===
+const ANIM = {
+  fadeInUp: (delay = 0) => ({
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1], delay },
+  }),
+  fadeInStagger: {
+    initial: { opacity: 0, y: 15 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.5, ease: "easeOut" },
+  },
+  starPulse: {
+    animate: { scale: [1, 1.2], y: [0, -6] },
+    transition: DESIGN.transitions.spring,
+  },
+  buttonTap: {
+    whileTap: { scale: 0.97 },
+  },
+  buttonPulse: {
+    animate: { scale: [1, 1.05, 1] },
+    transition: { duration: 0.4, ease: "easeInOut" },
+  },
+  float: {
+    animate: { y: [0, -8, 0] },
+    transition: { repeat: Infinity, duration: 2, ease: "easeInOut" },
+  },
+};
 
 /* ===== УНИВЕРСАЛЬНЫЙ СЧЁТЧИК НЕПРОЧИТАННЫХ ===== */
 const LS_KEYS = [
@@ -102,7 +188,6 @@ function getUnreadFromLocalStorage(): number {
 }
 
 function getUnreadCountFrom(auth: any): number {
-  // Прямые числовые поля
   let n =
     auth?.notificationsCount ??
     auth?.unreadCount ??
@@ -114,7 +199,6 @@ function getUnreadCountFrom(auth: any): number {
     auth?.notifications?.unread ??
     0;
 
-  // Массивы
   if (!Number.isFinite(n) || n <= 0) {
     const arrays = [
       auth?.notifications,
@@ -135,7 +219,6 @@ function getUnreadCountFrom(auth: any): number {
     }
   }
 
-  // LocalStorage (числа/строки/JSON/массивы/объекты)
   if (!Number.isFinite(n) || n <= 0) {
     const best = getUnreadFromLocalStorage();
     if (best > 0) n = best;
@@ -145,15 +228,10 @@ function getUnreadCountFrom(auth: any): number {
   return n < 0 ? 0 : n;
 }
 
-/** Хук: считывает счётчик; можно "пингануть" извне (trigger) — для проверки на открытии меню */
-
-/* useUnreadCount moved to hooks */
-
-
 /* ========================================================================================= */
-export function MobileNavigation() {const [open, setOpen] = useState(false);
+export function MobileNavigation() {
+  const [open, setOpen] = useState(false);
 
-  // Lock page scroll only while the menu is open
   useEffect(() => {
     const html = document.documentElement;
     const prevOverflow = html.style.overflow;
@@ -168,12 +246,11 @@ export function MobileNavigation() {const [open, setOpen] = useState(false);
     };
   }, [open]);
 
-  
-  const [ping, setPing] = useState(0); // увеличиваем при каждом открытии
+  const [ping, setPing] = useState(0);
   const unread = useUnreadTotal(ping);
 
   const handleOpen = () => {
-    setPing((p) => p + 1); // << пингуем «проверку уведомлений»
+    setPing((p) => p + 1);
     setOpen(true);
   };
 
@@ -185,14 +262,12 @@ export function MobileNavigation() {const [open, setOpen] = useState(false);
   );
 }
 
-/* ===== Нижний док: большие круглые кнопки + бейдж на «Меню» ===== */
+/* ===== Нижний док: ГЛАСС-МОРФНЫЕ КНОПКИ С ГРАДИЕНТАМИ И АНИМАЦИЯМИ ===== */
 function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: number; unread: number }) {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   useReducedMotion();
-
-  // unread is passed via props
 
   const items = useMemo(
     () => [
@@ -200,8 +275,6 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
       { id: "/rating", icon: BarChart2, to: "/rating", label: "Рейтинг" },
       { id: "/favorites", icon: Heart, to: ensureAuth(user, "/favorites"), label: "Избранное" },
       { id: "/shop", icon: ShoppingBag, to: "/shop", label: "Магазин" },
-      
-      // бейдж на кнопке «Меню»
       { id: "more", icon: MenuIcon, action: openMenu, label: "Меню", badge: unread },
     ],
     [user, unread, openMenu]
@@ -211,8 +284,12 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
     <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" aria-label="Нижняя навигация">
       <div className="mx-auto max-w-[820px] px-3 pb-3 pt-2" style={{ pointerEvents: "auto" }}>
         <div
-          className="w-full rounded-2xl border border-white/10 bg-transparent backdrop-blur-xl"
-          style={{ borderColor: TOKENS.border }}
+          className="w-full rounded-2xl border backdrop-blur-xl"
+          style={{
+            borderColor: DESIGN.colors.border,
+            background: DESIGN.colors.background.glass,
+            boxShadow: DESIGN.shadows.glass,
+          }}
         >
           <ul className="grid grid-cols-5">
             {items.map((it) => {
@@ -223,17 +300,18 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
 
               const Inner = (
                 <div className="relative">
-                  <div
+                  <motion.div
                     className="rounded-full inline-flex items-center justify-center leading-none border mx-auto"
                     style={{
                       width: 52,
                       height: 52,
-                      borderColor: TOKENS.border,
-                      background: "rgba(255,255,255,0.06)",
-                      boxShadow: isActive
-                        ? `inset 0 0 0 0.75px rgba(${TOKENS.accentRgb}, 0.95)`
-                        : "none",
+                      background: isActive
+                        ? `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`
+                        : DESIGN.colors.background.glass,
+                      boxShadow: isActive ? DESIGN.shadows.button : DESIGN.shadows.glass,
+                      border: "none",
                     }}
+                    whileTap={{ scale: 0.95 }}
                   >
                     {showBadge ? (
                       <motion.div
@@ -241,20 +319,28 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
                         animate={{ opacity: [0.9, 1, 0.9], scale: [1, 1.06, 1] }}
                         transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
                       >
-                        <IconBase icon={it.icon} size="row" strokeWidth={isActive ? 2.15 : 2} />
+                        <IconBase icon={it.icon} size="row" color={isActive ? "#ffffff" : undefined} />
                       </motion.div>
                     ) : (
-                      <IconBase icon={it.icon} size="row" strokeWidth={isActive ? 2.15 : 2} />
+                      <IconBase icon={it.icon} size="row" color={isActive ? "#ffffff" : undefined} />
                     )}
-                  </div>
+                  </motion.div>
 
                   {showBadge && (
-                    <span
+                    <motion.span
+                      initial={{ scale: 0 }}
+                      animate={{ scale: 1 }}
+                      exit={{ scale: 0 }}
                       className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[11px] leading-[18px] font-bold inline-flex items-center justify-center leading-none"
-                      style={{ background: TOKENS.accent, color: "#111", border: `1px solid ${TOKENS.border}` }}
+                      style={{
+                        background: DESIGN.colors.accent.primary,
+                        color: "#0a0a12",
+                        border: `1px solid ${DESIGN.colors.border}`,
+                        boxShadow: DESIGN.shadows.accent,
+                      }}
                     >
-                      {badge > TOKENS.badgeMax ? `${TOKENS.badgeMax}+` : badge}
-                    </span>
+                      {badge > 99 ? `99+` : badge}
+                    </motion.span>
                   )}
                 </div>
               );
@@ -280,19 +366,21 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
   );
 }
 
-/* ===== Полноэкранное меню ===== */
+/* ===== Полноэкранное меню: АНИМИРОВАННОЕ, С ГРАДИЕНТАМИ И ТЕНЯМИ ===== */
 function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: number; unread: number }) {
   const location = useLocation();
   const navigate = useNavigate();
   const pulseEnabled = useMemo(() => location.pathname !== "/notifications" && unread > 0, [location.pathname, unread]);
   const auth = (useAuth() as any) || {};
   const user = auth?.user;
-// duplicate unread declaration removed
 
   const reduce = useReducedMotion();
   const sheetTransition = reduce ? { duration: 0 } : { type: "tween", ease: "easeOut", duration: 0.28 };
 
-  // НЕ закрываем панель по клику "Выйти"
+  // Параллакс для фона
+  const { scrollY } = useScroll();
+  const bgIntensity = useTransform(scrollY, [0, 500], [0.3, 0.1]);
+
   const handleLogout = async () => {
     try {
       if (typeof auth.logout === "function") {
@@ -325,7 +413,7 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
       items: [
         { icon: Compass, title: "Каталог", to: "/characters" },
         { icon: BarChart2, title: "Рейтинг", to: "/rating" },
-        { icon: ShoppingBag, title: "Магазин", to: ensureAuth(user, "/shop") },
+        { icon: ShoppingBag, title: "Магазин", to: "/shop" },
         { icon: Heart, title: "Избранное", to: ensureAuth(user, "/favorites") },
       ],
     },
@@ -337,100 +425,148 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
 
   return (
     <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Мобильное меню">
-      <ThemedBackground className="z-0" />
-          <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm backdrop-blur-xl" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }} />
+      <ThemedBackground intensity={bgIntensity} className="z-0" />
+      <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }} />
 
       <motion.div
         initial={{ y: 24, opacity: 0.98 }} animate={{ y: 0, opacity: 1 }}
-        
         className="absolute inset-x-0 bottom-0 top-0 overflow-y-auto overscroll-contain"
-       transition={sheetTransition} exit={{ opacity: 0, transition: { duration: 0 } }}>
+        transition={sheetTransition} exit={{ opacity: 0, transition: { duration: 0 } }}>
         <div className="mx-auto max-w-[820px] px-4 pt-4 pb-[104px]">
-          {/* header */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <div
-                className="rounded-xl px-2.5 py-1 text-[11px] uppercase tracking-widest"
-                style={{ background: "rgba(255,255,255,0.08)", border: `1px solid ${TOKENS.border}` }}
+          {/* header — АНИМИРОВАННЫЙ ЗАГОЛОВОК */}
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-3">
+              <motion.div
+                {...ANIM.float}
+                className="rounded-full w-12 h-12 flex items-center justify-center"
+                style={{
+                  background: `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`,
+                  boxShadow: DESIGN.shadows.button,
+                }}
               >
-                BETA
-              </div>
-              <span className="font-display text-xl font-bold tracking-tight">CAS Каталог</span>
+                <IconBase icon={Heart} size="row" style={{ color: "#ffffff" }} />
+              </motion.div>
+              <h1
+                className="text-2xl font-black"
+                style={{
+                  background: "linear-gradient(120deg, #ffffff 0%, #d7aefb 50%, #ff6bd6 100%)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                  color: "transparent",
+                  fontFamily: DESIGN.fonts.heading,
+                }}
+              >
+                CAS Каталог
+              </h1>
             </div>
 
-            <button
+            <motion.button
+              {...ANIM.buttonTap}
               onClick={onClose}
-              className="rounded-xl border px-2.5 py-1.5"
-              style={{ borderColor: TOKENS.border }}
+              className="rounded-full p-3"
+              style={{
+                background: DESIGN.colors.background.glass,
+                border: `1px solid ${DESIGN.colors.border}`,
+                color: DESIGN.colors.text.primary,
+                boxShadow: DESIGN.shadows.glass,
+              }}
               aria-label="Закрыть меню"
             >
               <IconBase icon={X} size="row" />
-            </button>
+            </motion.button>
           </div>
 
-          {/* карточка входа/профиля */}
+          {/* карточка входа/профиля — ГРАДИЕНТНЫЙ ФОН И ТЕНИ */}
           {!user ? (
-            <div className="mb-4 rounded-2xl border p-3" style={{ borderColor: TOKENS.border }}>
-              <div className="flex items-center gap-3">
+            <div className="mb-8 rounded-2xl p-5" style={{ background: DESIGN.colors.background.glass, boxShadow: DESIGN.shadows.glass }}>
+              <div className="flex items-center gap-4">
                 <div
-                  className="rounded-full inline-flex items-center justify-center leading-none border shrink-0"
-                  style={{ width: 48, height: 48, borderColor: TOKENS.border, }}
+                  className="rounded-full inline-flex items-center justify-center"
+                  style={{ 
+                    width: 56, 
+                    height: 56, 
+                    background: DESIGN.colors.background.glass,
+                    boxShadow: DESIGN.shadows.glass,
+                  }}
                 >
                   <IconBase icon={LogIn} size="row" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-display font-semibold leading-tight">Войдите в аккаунт</p>
-                  <p className="text-[12px] opacity-70">Чтобы сохранять избранное и получать уведомления</p>
+                  <p className="font-bold text-lg mb-1" style={{ color: DESIGN.colors.text.primary }}>
+                    Войдите
+                  </p>
+                  <p className="text-sm" style={{ color: DESIGN.colors.text.muted }}>
+                    Чтобы сохранять избранное
+                  </p>
                 </div>
                 <Link
                   to="/login"
                   onClick={onClose}
-                  className="rounded-xl font-display font-semibold px-3 py-2"
-                  style={{ background: TOKENS.accent, color: "#111", border: `1px solid ${TOKENS.border}` }}
+                  className="rounded-full font-bold px-5 py-3"
+                  style={{
+                    background: `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`,
+                    color: "#ffffff",
+                    border: "none",
+                    boxShadow: DESIGN.shadows.button,
+                  }}
                 >
                   Войти
                 </Link>
               </div>
             </div>
           ) : (
-            <div className="mb-4 rounded-2xl border p-3" style={{ borderColor: TOKENS.border }}>
-              <div className="flex items-center gap-3">
-{(user.avatarUrl || user.avatar || user.photoURL) ? (
-  <img
-    src={(user.avatarUrl || user.avatar || user.photoURL) as string}
-    alt="Аватар"
-    className="w-[48px] h-[48px] rounded-full border shrink-0"
-    style={{ borderColor: TOKENS.border, objectFit: "cover" }}
-  />
-) : (
-  <div
-    className="w-[48px] h-[48px] rounded-full border shrink-0 inline-flex items-center justify-center leading-none"
-    style={{ borderColor: TOKENS.border, background: TOKENS.accent }}
-  >
-    <IconBase icon={Cat} size="avatar" className="text-black" />
-  </div>
-)}
+            <div className="mb-8 rounded-2xl p-5" style={{ background: DESIGN.colors.background.glass, boxShadow: DESIGN.shadows.glass }}>
+              <div className="flex items-center gap-4">
+                {(user.avatarUrl || user.avatar || user.photoURL) ? (
+                  <img
+                    src={(user.avatarUrl || user.avatar || user.photoURL) as string}
+                    alt="Аватар"
+                    className="w-14 h-14 rounded-full object-cover"
+                    style={{ border: `2px solid ${DESIGN.colors.border}` }}
+                  />
+                ) : (
+                  <div
+                    className="w-14 h-14 rounded-full inline-flex items-center justify-center"
+                    style={{ 
+                      background: `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`,
+                      boxShadow: DESIGN.shadows.button,
+                    }}
+                  >
+                    <IconBase icon={Cat} size="avatar" style={{ color: "#ffffff" }} />
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
-                  <p className="font-display font-semibold leading-tight truncate">
+                  <p className="font-bold text-lg" style={{ color: DESIGN.colors.text.primary }}>
                     {user?.nickname || user?.login}
                   </p>
-                  {user?.login && <p className="text-[12px] opacity-70 truncate">{user?.login}</p>}
+                  {user?.login && <p className="text-sm" style={{ color: DESIGN.colors.text.muted }}>{user?.login}</p>}
                 </div>
-                <div className="flex items-center gap-2 ml-auto">
-                  <button
+                <div className="flex items-center gap-3 ml-auto">
+                  <motion.button
+                    {...ANIM.buttonTap}
                     type="button"
                     aria-label="Настройки профиля"
-                    className="h-10 w-10 rounded-full border inline-flex items-center justify-center leading-none hover:bg-black/5 transition"
-                    style={{ borderColor: TOKENS.border }}
+                    className="h-11 w-11 rounded-full inline-flex items-center justify-center"
+                    style={{
+                      background: DESIGN.colors.background.glass,
+                      color: DESIGN.colors.text.primary,
+                      boxShadow: DESIGN.shadows.glass,
+                    }}
                     onClick={() => { onClose(); navigate(ensureAuth(user, "/profile")); }}
                   >
                     <IconBase icon={Settings} size="row" />
-                  </button>
-                  <button
+                  </motion.button>
+                  <motion.button
+                    {...ANIM.buttonTap}
                     type="button"
                     aria-label="Уведомления"
-                    className="relative h-10 w-10 rounded-full border inline-flex items-center justify-center leading-none hover:bg-black/5 transition"
-                    style={{ borderColor: TOKENS.border }}
+                    className="relative h-11 w-11 rounded-full inline-flex items-center justify-center"
+                    style={{
+                      background: DESIGN.colors.background.glass,
+                      color: DESIGN.colors.text.primary,
+                      boxShadow: DESIGN.shadows.glass,
+                    }}
                     onClick={() => { onClose(); navigate(ensureAuth(user, "/notifications")); }}
                   >
                     <IconBase icon={Bell} size="row" />
@@ -441,25 +577,31 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
                           animate={{ opacity: 1, scale: 1 }}
                           exit={{ opacity: 0, scale: 0.8 }}
                           transition={{ duration: 0.18 }}
-                          className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-[6px] rounded-full border text-[11px] leading-[18px] font-bold inline-flex items-center justify-center leading-none"
-                          style={{ background: TOKENS.accent, color: "#111", border: `1px solid ${TOKENS.border}` }}
+                          className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-[6px] rounded-full text-[11px] leading-[20px] font-bold inline-flex items-center justify-center"
+                          style={{
+                            background: DESIGN.colors.accent.primary,
+                            color: "#0a0a12",
+                            border: `1px solid ${DESIGN.colors.border}`,
+                            boxShadow: DESIGN.shadows.accent,
+                          }}
                         >
-                          {unread > TOKENS.badgeMax ? `${TOKENS.badgeMax}+` : unread}
+                          {unread > 99 ? `99+` : unread}
                         </motion.span>
                       )}
                     </AnimatePresence>
-                  </button>
-                  
+                  </motion.button>
                 </div>
               </div>
             </div>
           )}
 
-          {/* группы ссылок */}
-          <div className="flex flex-col gap-4">
+          {/* группы ссылок — ГРАДИЕНТНЫЕ КНОПКИ */}
+          <div className="flex flex-col gap-6">
             {groups.map((g) => (
-              <section key={g.title} className="flex flex-col gap-2">
-                <h3 className="px-1 text-[12px] tracking-wider uppercase opacity-70">{g.title}</h3>
+              <section key={g.title} className="flex flex-col gap-3">
+                <h3 className="px-1 text-sm uppercase tracking-wider font-bold" style={{ color: DESIGN.colors.text.muted }}>
+                  {g.title}
+                </h3>
                 <div className="flex flex-col gap-2">
                   {g.items.map(({ icon, title, to, onClick, badge, pulse }) => {
                     const isActive = to && (location.pathname === to || location.pathname.startsWith(to + "/"));
@@ -482,60 +624,54 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
             ))}
           </div>
 
-          {/* ▼▼▼ 2. НОВАЯ СЕКЦИЯ TELEGRAM ▼▼▼ */}
-          <section className="flex flex-col gap-2 mt-4">
-            <h3 className="px-1 text-[12px] tracking-wider uppercase opacity-70">Сообщество</h3>
-            {/* Мы не можем использовать компонент <Row/>, так как нам нужны кастомные синие цвета.
-              Поэтому мы создаем <a> тег, который выглядит точно так же, как <Row/>, но с цветами Telegram.
-            */}
-            <a
-              href="https://t.me/cascharacter" // Добавляем https:// для корректной ссылки
+          {/* Секция Telegram — ГРАДИЕНТНЫЙ ФОН И ТЕНИ */}
+          <section className="flex flex-col gap-3 mt-8">
+            <h3 className="px-1 text-sm uppercase tracking-wider font-bold" style={{ color: DESIGN.colors.text.muted }}>
+              Сообщество
+            </h3>
+            <motion.a
+              {...ANIM.buttonTap}
+              href="https://t.me/cascharacter"
               target="_blank"
               rel="noopener noreferrer"
-              onClick={onClose} // Закрываем меню при нажатии
-              className="relative overflow-hidden rounded-2xl border flex items-center gap-3 px-3 py-2"
+              onClick={onClose}
+              className="relative overflow-hidden rounded-2xl flex items-center gap-4 px-5 py-4"
               style={{
-                borderColor: "rgba(0, 136, 204, 0.4)", // (Blue-500 @ 40%)
-                background: "rgba(0, 136, 204, 0.1)",  // (Blue-500 @ 10%)
-                boxSizing: "border-box",
-                boxShadow: "inset 0 0 0 1px rgba(0, 136, 204, 0.6)", // Синий 'active' контур
+                background: `linear-gradient(135deg, #4facfe, #00f2fe)`,
+                color: "#ffffff",
+                boxShadow: "0 6px 20px rgba(79, 172, 254, 0.3)",
               }}
             >
-              {/* Иконка (в стиле <Row/>) */}
               <div
-                className="grid place-items-center border shrink-0 rounded-full relative"
+                className="flex items-center justify-center rounded-full"
                 style={{
-                  width: 40, height: 40, 
-                  borderColor: "rgba(255, 255, 255, 0.6)", // Синяя рамка
-                  background: "rgba(0, 136, 204, 0.9)", // Синий фон
+                  width: 44, 
+                  height: 44, 
+                  background: "rgba(255, 255, 255, 0.2)",
                 }}
               >
-                {/* Используем иконку Send (самолетик) для Telegram */}
-                <IconBase icon={Send} size="dockLg" style={{ color: "#ffffff" }} /> {/* Светло-синий (Blue-400) */}
+                <IconBase icon={Send} size="dockLg" style={{ color: "#ffffff" }} />
               </div>
               
-              {/* Текст */}
               <div className="min-w-0 flex-1">
-                <p className="font-display font-semibold whitespace-nowrap overflow-hidden text-ellipsis" style={{ fontSize: "clamp(13px,3.2vw,15px)", lineHeight: 1.2, color: "#93C5FD" }}> {/* Blue-300 */}
+                <p className="font-bold text-lg">
                   Telegram Канал
                 </p>
               </div>
 
-              {/* Стрелка */}
-              <span className="opacity-60" style={{ color: "#60A5FA" }}> {/* Blue-400 */}
-                <IconBase icon={ChevronRight} size="row" />
-              </span>
-            </a>
+              <IconBase icon={ChevronRight} size="row" />
+            </motion.a>
           </section>
-          {/* ▲▲▲ КОНЕЦ СЕКЦИИ TELEGRAM ▲▲▲ */}
 
+       
+          
         </div>
       </motion.div>
     </div>
   );
 }
 
-/* ===== Row — тонкий розовый контур, опциональный бейдж и пульсация ===== */
+/* ===== Row — ГРАДИЕНТНЫЕ КНОПКИ С ТЕНЯМИ ===== */
 function Row({
   Icon, title, to, onClick, active, onClose, badge, pulse, dot,
 }: {
@@ -556,66 +692,74 @@ function Row({
 
   const showBadge = typeof badge === "number" && badge > 0;
 
-  const IconNode = (
-    <div
-      className="inline-flex items-center justify-center leading-none border shrink-0 rounded-full relative"
-      style={{
-        width: 40,
-        height: 40,
-        borderColor: active ? `rgba(${TOKENS.accentRgb}, .6)` : TOKENS.border,
-        background: "rgba(255,255,255,0.06)",
-      }}
-    >
-      {pulse && showBadge ? (
-        <motion.div
-          initial={{ opacity: 0.9, scale: 1 }}
-          animate={{ opacity: [0.9, 1, 0.9], scale: [1, 1.08, 1] }}
-          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-        >
-          <IconBase icon={Icon} size="row" strokeWidth={active ? 2.05 : 2}  size="dockLg" />
-        </motion.div>
-      ) : (
-        <IconBase icon={Icon} size="row" strokeWidth={active ? 2.05 : 2}  size="dockLg" />
-      )}
-
-      <AnimatePresence>
-        {showBadge && (
-          <motion.span
-          className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full text-[11px] leading-[18px] font-bold inline-flex items-center justify-center leading-none"
-          style={{ background: "rgba(255,255,255,0.06)", color: "#111", border: `1px solid ${TOKENS.border}` }}
-        >
-          {badge! > TOKENS.badgeMax ? `${TOKENS.badgeMax}+` : badge}
-        </motion.span>
-      )}
-      </AnimatePresence>
-    </div>
-  );
-
   return (
-    <Wrap
-      {...wrapProps}
-      className="relative overflow-hidden rounded-2xl border flex items-center gap-3 px-3 py-2"
-      style={{
-        borderColor: TOKENS.border,
-        background: active ? TOKENS.itemBgActive : TOKENS.itemBg,
-        boxSizing: "border-box",
-        boxShadow: active ? `inset 0 0 0 1px ${TOKENS.accent}` : "none",
-      }}
+    <motion.div
+      {...ANIM.buttonTap}
     >
-      {IconNode}
+      <Wrap
+        {...wrapProps}
+        className="relative overflow-hidden rounded-2xl flex items-center gap-4 px-5 py-4 transition-all duration-300"
+        style={{
+          background: active
+            ? `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`
+            : DESIGN.colors.background.glass,
+          color: active ? "#ffffff" : DESIGN.colors.text.primary,
+          boxShadow: active ? DESIGN.shadows.button : DESIGN.shadows.glass,
+        }}
+      >
+        <div
+          className="inline-flex items-center justify-center shrink-0 rounded-full"
+          style={{
+            width: 44,
+            height: 44,
+            background: active
+              ? "rgba(255, 255, 255, 0.2)"
+              : DESIGN.colors.background.glass,
+          }}
+        >
+          {pulse && showBadge ? (
+            <motion.div
+              initial={{ opacity: 0.9, scale: 1 }}
+              animate={{ opacity: [0.9, 1, 0.9], scale: [1, 1.08, 1] }}
+              transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <IconBase icon={Icon} size="row" color={active ? "#ffffff" : undefined} />
+            </motion.div>
+          ) : (
+            <IconBase icon={Icon} size="row" color={active ? "#ffffff" : undefined} />
+          )}
 
-      <div className="min-w-0 flex-1">
-        <p className="font-display font-semibold whitespace-nowrap truncate" style={{ fontSize: "clamp(13px,3.2vw,15px)", lineHeight: 1.2 }}>
-          {title}
-        </p>
-      </div>
+          <AnimatePresence>
+            {showBadge && (
+              <motion.span
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                exit={{ scale: 0 }}
+                className="absolute -top-1 -right-1 min-w-[20px] h-[20px] px-1 rounded-full text-[11px] leading-[20px] font-bold inline-flex items-center justify-center"
+                style={{
+                  background: "#ffffff",
+                  color: "#0a0a12",
+                  border: `1px solid ${DESIGN.colors.border}`,
+                  boxShadow: DESIGN.shadows.accent,
+                }}
+              >
+                {badge! > 99 ? `99+` : badge}
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </div>
 
-      {to && (
-        <span className="opacity-60">
+        <div className="min-w-0 flex-1">
+          <p className="font-bold text-lg">
+            {title}
+          </p>
+        </div>
+
+        {to && (
           <IconBase icon={ChevronRight} size="row" />
-        </span>
-      )}
-    </Wrap>
+        )}
+      </Wrap>
+    </motion.div>
   );
 }
 

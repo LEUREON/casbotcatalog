@@ -1,6 +1,6 @@
 // project/src/contexts/AuthContext.tsx
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { pb } from '../lib/pocketbase';
 import { User, LoginStatus } from '../types';
 import { RecordModel } from 'pocketbase';
@@ -35,27 +35,39 @@ const formatUser = (model: RecordModel | null): User | null => {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => formatUser(pb.authStore.model));
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const logout = useCallback(() => {
+    pb.authStore.clear();
+    // setUser(null) будет вызван автоматически через onChange
+  }, []);
+
   useEffect(() => {
-    const unsubscribe = pb.authStore.onChange((token, model) => {
+    // Эта функция будет вызвана немедленно при подписке (благодаря `true`)
+    // и при каждом изменении состояния аутентификации.
+    const handleAuthChange = (token: string, model: RecordModel | null) => {
       const formattedUser = formatUser(model);
+      
       if (formattedUser && formattedUser.isBlocked) {
+        // Если пользователь заблокирован, выходим из системы
         logout();
       } else {
         setUser(formattedUser);
       }
-    }, true);
+      
+      // Мы завершили первоначальную проверку, можно убирать загрузку
+      setLoading(false);
+    };
 
-    setLoading(false);
+    const unsubscribe = pb.authStore.onChange(handleAuthChange, true);
+
     return () => unsubscribe();
-  }, []);
+  }, [logout]);
 
-  // ▼▼▼ ИЗМЕНЕНИЕ: Вход всегда в нижнем регистре ▼▼▼
   const login = async (identity: string, pass: string): Promise<LoginStatus> => {
     try {
-      const identityToTry = identity.toLowerCase(); // Приводим к нижнему регистру
+      const identityToTry = identity.toLowerCase();
       await pb.collection('users').authWithPassword(identityToTry, pass);
       return LoginStatus.SUCCESS;
     } catch (err) {
@@ -63,18 +75,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // ▼▼▼ ИЗМЕНЕНИЕ: Регистрация всегда в нижнем регистре ▼▼▼
   const register = async (username: string, nickname: string, email: string, pass: string): Promise<{ success: boolean; message: string }> => {
     try {
       await pb.collection('users').create({
-        username: username.toLowerCase(), // Сохраняем в нижнем регистре
-        email: email.toLowerCase(), // Сохраняем в нижнем регистре
+        username: username.toLowerCase(),
+        email: email.toLowerCase(),
         nickname: nickname,
         password: pass,
         passwordConfirm: pass,
         role: 'user',
       });
-      // Авто-вход с данными в нижнем регистре
       await login(username.toLowerCase(), pass); 
       return { success: true, message: 'Регистрация успешна!' };
     } catch (err: any) {
@@ -93,17 +103,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return { success: false, message: 'Неизвестная ошибка регистрации.' };
     }
   };
-  // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЙ ▲▲▲
-
-  const logout = () => {
-    pb.authStore.clear();
-    setUser(null);
-  };
 
   const updateProfile = async (updates: any): Promise<{ success: boolean; message: string }> => {
     if (!user) return { success: false, message: 'Пользователь не авторизован.' };
     try {
       const formData = new FormData();
+      // Проверяем каждое поле перед добавлением в FormData
       if (updates.nickname && updates.nickname !== user.nickname) formData.append('nickname', updates.nickname);
       if (updates.email && updates.email !== user.email) formData.append('email', updates.email.toLowerCase());
       if (updates.password && updates.oldPassword) {
@@ -111,13 +116,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         formData.append('passwordConfirm', updates.password);
         formData.append('oldPassword', updates.oldPassword);
       }
-      if (updates.avatarFile) {
+      if (updates.avatarFile instanceof File) {
         formData.append('avatar', updates.avatarFile);
       } else if (updates.avatarFile === null) {
         formData.append('avatar', '');
       }
+      
       const updatedUser = await pb.collection('users').update(user.id, formData);
-      setUser(formatUser(updatedUser));
+      // setUser(formatUser(updatedUser)); // Не нужно, authStore.onChange сделает это
       await pb.collection('users').authRefresh();
       return { success: true, message: 'Профиль успешно обновлен.' };
     } catch (err: any) {
@@ -133,14 +139,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ? currentFavorites.filter((id) => id !== characterId)
       : [...currentFavorites, characterId];
     try {
-      const updatedUser = await pb.collection('users').update(user.id, { favorites: newFavorites });
-      setUser(formatUser(updatedUser));
+      await pb.collection('users').update(user.id, { favorites: newFavorites });
     } catch (error) {
       console.error("Failed to update favorites:", error);
     }
   };
 
-  // ▼▼▼ ИЗМЕНЕНИЕ: Проверка блокировки всегда в нижнем регистре ▼▼▼
   const isUserBlocked = async (identity: string): Promise<boolean> => {
     try {
       const identityToTry = identity.toLowerCase();
@@ -151,7 +155,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false; 
     }
   };
-  // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЙ ▲▲▲
 
   const isAdmin = user?.role === 'admin';
 
@@ -164,4 +167,4 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
-}; 
+};

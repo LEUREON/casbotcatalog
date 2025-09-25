@@ -1,47 +1,57 @@
-import React, { useState } from "react";
-import ThemedBackground from "../common/ThemedBackground";
-import LoginForm from "./LoginForm";
-import RegisterForm from "./RegisterForm";
+// src/components/Auth/AuthDialog.tsx
+import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { X } from "lucide-react";
+import { LoginForm } from "./LoginForm";
+import { RegisterForm } from "./RegisterForm";
+import { useAuth } from "../../contexts/AuthContext";
+import { useScrollLock } from "../../hooks/useScrollLock";
 
-type Props = {
-  initialMode?: "login" | "register";
-  onClose?: () => void;
-};
+export function AuthDialog() {
+  const { authState, closeAuthDialog } = useAuth();
+  const [isLoginView, setIsLoginView] = useState(true);
+  const { lockScroll, unlockScroll } = useScrollLock();
 
-/**
- * Центрированная модалка авторизации в стиле сайта.
- * Фон — ThemedBackground, затем полупрозрачный слой и карточка по центру.
- */
-const AuthDialog: React.FC<Props> = ({ initialMode = "login", onClose }) => {
-  const [mode, setMode] = useState<"login" | "register">(initialMode);
+  useEffect(() => {
+    if (authState.isOpen) {
+      lockScroll();
+      setIsLoginView(authState.view === 'login');
+    } else {
+      unlockScroll();
+    }
+    return unlockScroll;
+  }, [authState.isOpen, authState.view, lockScroll, unlockScroll]);
+
+  const handleToggleView = () => {
+    setIsLoginView(!isLoginView);
+  };
+
+  const handleClose = () => {
+    closeAuthDialog();
+  };
+
+  const backdropVariants = {
+    hidden: { opacity: 0 },
+    visible: { opacity: 1 },
+  };
+
+  const dialogVariants = {
+    hidden: { opacity: 0, scale: 0.9, y: 20 },
+    visible: { opacity: 1, scale: 1, y: 0 },
+    exit: { opacity: 0, scale: 0.95, y: -20 },
+  };
+
+  if (!authState.isOpen) {
+    return null;
+  }
 
   return (
-    <div className="fixed inset-0 z-[999]">
-      {/* Site background */}
-      <ThemedBackground intensity={0.9} animated />
-
-      {/* Dim overlay */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
-
-      {/* Centered card */}
-      <div className="relative z-10 w-full h-full grid place-items-center p-3">
-        <div className="w-full max-w-sm">
-          {mode === "login" ? (
-            <LoginForm
-              onClose={onClose}
-              onSuccess={onClose}
-              onSwitchRegister={() => setMode("register")}
-            />
-          ) : (
-            <RegisterForm
-              onClose={onClose}
-              onSuccess={onClose}
-            />
-          )}
-        </div>
-      </div>
-    </div>
+    <AnimatePresence>
+      {isLoginView ? (
+        <LoginForm onClose={handleClose} onSwitchToRegister={handleToggleView} />
+      ) : (
+        <RegisterForm onClose={handleClose} onSwitchToLogin={handleToggleView} />
+      )}
+    </AnimatePresence>
   );
-};
-
-export default AuthDialog;
+}

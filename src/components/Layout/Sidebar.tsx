@@ -5,7 +5,7 @@ import {
   Compass, BarChart2, Heart, Users, ShoppingBag, Bell, LifeBuoy, Bot, Plus,
   Settings, LogOut, LogIn, ChevronRight, Cat
 } from "lucide-react";
-import IconBase from "../ui/IconBase";
+import IconBase from "../ui/IconBase"; 
 import ThemedBackground from "../common/ThemedBackground";
 import { useAuth } from "../../contexts/AuthContext";
 import { useUnreadTotal } from "../../hooks/useUnreadTotal";
@@ -23,6 +23,30 @@ const TOKENS = {
   accentRgb: "247, 207, 225",
   badgeMax: 99,
 };
+
+
+const DESIGN = {
+  colors: {
+    border: "rgba(255, 255, 255, 0.08)",
+    background: {
+      glass: "rgba(40, 40, 50, 0.65)",
+      glassHover: "rgba(50, 50, 65, 0.8)",
+      item: "rgba(255,255,255,0.04)",
+    },
+    accent: {
+      primary: "#d7aefb",
+      secondary: "#ff6bd6",
+    },
+  },
+  shadows: {
+    glass: "0 8px 32px rgba(0, 0, 0, 0.35)",
+    button: "0 6px 20px rgba(255, 107, 214, 0.3)",
+    buttonHover: "0 8px 24px rgba(255, 107, 214, 0.4)",
+    accent: "0 4px 16px rgba(215, 174, 251, 0.4)",
+  },
+};
+
+
 
 const ensureAuth = (user: any, to: string) =>
   !user ? `/login?next=${encodeURIComponent(to)}` : to;
@@ -168,21 +192,23 @@ function Row({ Icon, title, to, onClick, active, badge }: {
       {...wrapProps}
       className="relative overflow-hidden rounded-2xl border flex items-center gap-3 px-3 py-2"
       style={{
-        borderColor: TOKENS.border,
-        background: active ? TOKENS.itemBgActive : TOKENS.itemBg,
-        boxSizing: "border-box" as const,
-        boxShadow: active ? `inset 0 0 0 1px ${TOKENS.accent}` : "none",
+        borderColor: DESIGN.colors.border,
+        background: active ? `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})` : DESIGN.colors.background.glass,
+        color: active ? "#ffffff" : undefined,
+        boxShadow: active ? DESIGN.shadows.button : DESIGN.shadows.glass,
       }}
     >
       <div
-        className="grid place-items-center border shrink-0 rounded-full relative"
+        className="grid place-items-center rounded-full relative"
         style={{
-          width: 40, height: 40, borderColor: active ? `rgba(${TOKENS.accentRgb}, .6)` : TOKENS.border,
-          background: "rgba(255,255,255,0.06)",
+          width: 44,
+          height: 44,
+          background: active ? `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})` : "rgba(255,255,255,0.12)",
+          boxShadow: active ? DESIGN.shadows.button : "none",
         }}
       >
-        <IconBase icon={Icon} />
-        <AnimatePresence>
+        <IconBase icon={Icon}  style={active ? { color: "#ffffff" } : undefined} />
+<AnimatePresence>
           {badge && (
             <motion.span
               initial={{ opacity: 0, scale: 0.8 }}
@@ -266,7 +292,7 @@ function ProfileFooter({
             {unread > 0 && (
               <span
                 className="absolute -top-1.5 -right-1.5 rounded-full text-[10px] font-bold px-1.5 h-4 leading-none inline-flex items-center justify-center"
-                style={{ background: TOKENS.accent, color: "black" }}
+                style={{ background: DESIGN.colors.accent.primary, color: "#0a0a12", border: `1px solid ${DESIGN.colors.border}`, boxShadow: DESIGN.shadows.accent }}
               >
                 {unread > BADGE_LIMIT ? `${BADGE_LIMIT}+` : unread}
               </span>
@@ -299,7 +325,7 @@ function ProfileFooter({
           <div className="w-12 h-12 rounded-full bg-accent border-white/15 grid place-items-center text-black" style={{ background: TOKENS.accent }}>
             <Cat className="text-black w-[22px] h-[22px]" />
           </div>
-        )}
+        )} 
 
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-white truncate">{displayName}</div>
@@ -317,7 +343,7 @@ function LoginFooter({ onLogin }: { onLogin: () => void }) {
         onClick={onLogin}
         className="shrink-0 rounded-2xl font-semibold hover:brightness-95 active:brightness-90 w-full px-6 h-12"
         style={{ 
-          backgroundColor: '#f7cfe1',
+          backgroundColor: '#f794dc',
           color: 'var(--accent-contrast, #000000) !important',
           border: 'none',
           textShadow: 'none',
@@ -331,3 +357,4 @@ function LoginFooter({ onLogin }: { onLogin: () => void }) {
     </div>
   );
 }
+ 

@@ -2,17 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { pb } from '../lib/pocketbase';
-import { Character, User, FilterState, ShopItem, Message, Notification, Newsletter, LinkPreset, CharacterLink } from '../types';
+import { Character, User, FilterState, ShopItem, Message, Notification, Newsletter } from '../types';
 import { useAuth } from './AuthContext';
 
 type ShopItems = ShopItem[];
 type Messages = Message[];
-
-// ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ ▼▼▼
-// Читаем текстовое поле 'icon_name', а не 'icon' (File)
-const formatLinkPreset = (record: any): LinkPreset => ({ ...formatRecord(record), icon: record.icon_name || '' });
-const formatCharacterLink = (record: any): CharacterLink => formatRecord(record);
-// ▲▲▲ КОНЕЦ ▲▲▲
 
 interface DataContextType {
   characters: Character[];
@@ -22,14 +16,14 @@ interface DataContextType {
   notifications: Notification[];
   newsletters: Newsletter[];
   filters: FilterState;
-  setFilters: (filters: FilterState) => void;
+  setFilters: (filters: FilterState | ((prev: FilterState) => FilterState)) => void;
   filteredCharacters: Character[];
   loading: boolean;
   charactersLoading: boolean;
   usersLoading: boolean;
   shopItemsLoading: boolean;
   updateCharacter: (id: string, updates: Partial<Character> | FormData) => Promise<boolean>;
-  addCharacter: (characterData: Omit<Character, 'id' | 'createdAt'> | FormData) => Promise<any>; // Изменено
+  addCharacter: (characterData: Omit<Character, 'id' | 'createdAt'> | FormData) => Promise<any>;
   deleteCharacter: (id: string) => Promise<boolean>;
   loadCharacters: () => Promise<void>;
   loadUsers: () => Promise<void>;
@@ -49,11 +43,6 @@ interface DataContextType {
   addNewsletter: (data: FormData) => Promise<boolean>;
   updateNewsletter: (id: string, data: FormData) => Promise<boolean>;
   deleteNewsletter: (id: string) => Promise<boolean>;
-  linkPresets: LinkPreset[];
-  characterLinks: CharacterLink[];
-  loadLinkPresets: () => Promise<void>;
-  loadCharacterLinks: () => Promise<void>;
-  updateCharacterLinks: (characterId: string, links: Partial<CharacterLink>[]) => Promise<void>;
 }
 
 
@@ -64,11 +53,16 @@ const formatCharacter = (record: any): Character => ({
     ...formatRecord(record),
     photo: record.photo ? pb.getFileUrl(record, record.photo) : '',
     tags: record.tags || [],
-    links: [], // Ссылки будут подгружаться отдельно
+    category: record.category || [],
     dominantColor: record.dominantColor || '',
+    links: Array.isArray(record.links) ? record.links : [],
 });
 const formatUser = (model: any): User => ({ id: model.id, username: model.username, nickname: model.nickname, email: model.email, role: model.role, avatar: model.avatar ? pb.getFileUrl(model, model.avatar) : undefined, createdAt: new Date(model.created), isBlocked: model.is_blocked || false, favorites: model.favorites || [] });
-const formatShopItem = (record: any): ShopItem => formatRecord(record);
+const formatShopItem = (record: any): ShopItem => ({
+    ...formatRecord(record),
+    image: record.image ? pb.getFileUrl(record, record.image) : '',
+    actionButtons: Array.isArray(record.actionButtons) ? record.actionButtons : [],
+});
 const formatMessage = (record: any): Message => {
     const files = record.files || [];
     const fileArray = Array.isArray(files) ? files : [files];
@@ -89,13 +83,22 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Messages>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
-  const [linkPresets, setLinkPresets] = useState<LinkPreset[]>([]);
-  const [characterLinks, setCharacterLinks] = useState<CharacterLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [charactersLoading, setCharactersLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(false);
   const [shopItemsLoading, setShopItemsLoading] = useState(false);
-  const [filters, setFilters] = useState<FilterState>({ search: '', gender: 'all', ageGroup: 'all', sortBy: 'newest' });
+  
+  const [filters, setFilters] = useState<FilterState>({ 
+    search: '', 
+    gender: 'all', 
+    ageGroup: 'all', 
+    sortBy: 'newest', 
+    includeTags: [], 
+    excludeTags: [],
+    includeCategories: [],
+    excludeCategories: [],
+  });
+
   const { user, isAdmin, toggleFavorite } = useAuth();
   const initialLoadDone = useRef(false);
 
@@ -144,44 +147,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const loadLinkPresets = useCallback(async () => {
-    try {
-      const recs = await pb.collection('link_presets').getFullList({ sort: 'name', '$autoCancel': false });
-      setLinkPresets(recs.map(formatLinkPreset));
-    } catch (e) { console.error("Failed to load link presets", e); }
-  }, []);
-
-  const loadCharacterLinks = useCallback(async () => {
-    try {
-      const recs = await pb.collection('character_custom_links').getFullList({ expand: 'preset_id', '$autoCancel': false });
-      setCharacterLinks(recs.map(formatCharacterLink));
-    } catch (e) { console.error("Failed to load character links", e); }
-  }, []);
-
-  const updateCharacterLinks = useCallback(async (characterId: string, links: Partial<CharacterLink>[]) => {
-    const oldLinks = characterLinks.filter(l => l.character_id === characterId);
-    for (const link of oldLinks) {
-      try { await pb.collection('character_custom_links').delete(link.id); } catch(e) { console.error("Failed to delete old link", e)}
-    }
-
-    for (const link of links) {
-      if (link.preset_id && link.url) {
-        try {
-          await pb.collection('character_custom_links').create({
-            character_id: characterId,
-            preset_id: link.preset_id,
-            url: link.url,
-            custom_label: link.custom_label || "",
-            custom_color: link.custom_color || "",
-            caption: link.caption || "",
-            custom_text_color: link.custom_text_color || "",
-          });
-        } catch(e) { console.error("Failed to create new link", e)}
-      }
-    }
-    
-    await loadCharacterLinks();
-  }, [characterLinks, loadCharacterLinks]);
 
   useEffect(() => {
     if (initialLoadDone.current) return;
@@ -194,8 +159,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             loadNotifications(),
             loadNewsletters(),
             loadMessages(),
-            loadLinkPresets(),
-            loadCharacterLinks(),
         ];
         await Promise.allSettled(promises);
         setLoading(false);
@@ -211,7 +174,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         pb.collection('messages').unsubscribe('*');
     };
 
-  }, [loadCharacters, loadUsers, loadNotifications, loadNewsletters, loadMessages, loadLinkPresets, loadCharacterLinks]);
+  }, [loadCharacters, loadUsers, loadNotifications, loadNewsletters, loadMessages]);
 
   const addNotification = useCallback(async (notificationData: Omit<Notification, 'id' | 'createdAt'> | FormData) => {
     try {
@@ -360,10 +323,43 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const filteredCharacters = useMemo(() => characters.filter(c => { const s=filters.search.toLowerCase(); return(!s||c.name.toLowerCase().includes(s)||c.occupation.toLowerCase().includes(s))&& (filters.gender==='all'||c.gender===filters.gender)&&(filters.ageGroup==='all'||c.ageGroup===filters.ageGroup);}).sort((a,b) => { if(filters.sortBy==='rating')return b.rating-a.rating; if(filters.sortBy==='newest')return new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime(); if(filters.sortBy==='name')return a.name.localeCompare(b.name); return 0; }), [characters, filters]);
+  // ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ: Обновлена логика фильтрации ▼▼▼
+  const filteredCharacters = useMemo(() => {
+    return characters
+      .filter(char => {
+        const searchTerm = (filters.search || "").toLowerCase();
+        const searchMatch = !searchTerm || 
+          char.name.toLowerCase().includes(searchTerm) ||
+          (char.occupation || "").toLowerCase().includes(searchTerm) ||
+          (char.description || "").toLowerCase().includes(searchTerm);
+
+        const genderMatch = filters.gender === 'all' || char.gender === filters.gender;
+        const ageGroupMatch = filters.ageGroup === 'all' || char.ageGroup === filters.ageGroup;
+        
+        const includeTagsMatch = filters.includeTags.length === 0 || 
+          filters.includeTags.every(tag => (char.tags || []).includes(tag));
+          
+        const excludeTagsMatch = filters.excludeTags.length === 0 || 
+          !filters.excludeTags.some(tag => (char.tags || []).includes(tag));
+
+        const includeCategoriesMatch = filters.includeCategories.length === 0 ||
+          filters.includeCategories.some(cat => (char.category || []).includes(cat));
+
+        const excludeCategoriesMatch = filters.excludeCategories.length === 0 ||
+          !filters.excludeCategories.some(cat => (char.category || []).includes(cat));
+
+        return searchMatch && genderMatch && ageGroupMatch && includeTagsMatch && excludeTagsMatch && includeCategoriesMatch && excludeCategoriesMatch;
+      })
+      .sort((a, b) => {
+        if (filters.sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
+        if (filters.sortBy === "name") return a.name.localeCompare(b.name);
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  }, [characters, filters]);
+  // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
   
   //@ts-ignore
-  const value: DataContextType = { loading, characters, users, shopItems, messages, notifications, newsletters, filters, setFilters, filteredCharacters, charactersLoading, usersLoading, shopItemsLoading, updateCharacter, addCharacter, deleteCharacter, loadCharacters, loadUsers, updateUser, loadShopItems, addShopItem, updateShopItem, deleteShopItem, loadMessages, addMessage, updateMessage, toggleFavorite, addNotification, markNotificationAsRead, loadNotifications, loadNewsletters, addNewsletter, updateNewsletter, deleteNewsletter, linkPresets, characterLinks, loadLinkPresets, loadCharacterLinks, updateCharacterLinks };
+  const value: DataContextType = { loading, characters, users, shopItems, messages, notifications, newsletters, filters, setFilters, filteredCharacters, charactersLoading, usersLoading, shopItemsLoading, updateCharacter, addCharacter, deleteCharacter, loadCharacters, loadUsers, updateUser, loadShopItems, addShopItem, updateShopItem, deleteShopItem, loadMessages, addMessage, updateMessage, toggleFavorite, addNotification, markNotificationAsRead, loadNotifications, loadNewsletters, addNewsletter, updateNewsletter, deleteNewsletter };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

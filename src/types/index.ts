@@ -1,4 +1,4 @@
-// project/src/types/index.ts
+// src/types/index.ts
 
 export enum LoginStatus {
   SUCCESS = 'SUCCESS',
@@ -19,6 +19,11 @@ export interface User {
   favorites?: string[];
 }
 
+export interface CharacterLink {
+  label: string;
+  url: string;
+}
+
 export interface Character {
   id: string;
   name: string;
@@ -35,8 +40,9 @@ export interface Character {
   createdAt: Date;
   createdBy: string;
   tags: string[];
-  links: CharacterLink[]; 
+  category: string[];
   dominantColor?: string;
+  links: CharacterLink[];
 }
 
 export interface UserCharacter extends Character {
@@ -92,7 +98,6 @@ export interface Notification {
   recipientId: string;
   senderId: string;
   senderName: string;
-  // ▼▼▼ ИЗМЕНЕНИЕ: Добавлен тип 'dislike' ▼▼▼
   type: 'reply' | 'status_change' | 'admin_reply' | 'new_message' | 'new_user_character' | 'like' | 'broadcast' | 'support_reply' | 'dislike';
   entityId: string;
   message?: string;
@@ -119,27 +124,8 @@ export interface FilterState {
   gender: 'all' | 'male' | 'female';
   ageGroup: 'all' | '18+' | '45+' | 'immortal';
   sortBy: 'rating' | 'newest' | 'name';
-}
-
-export interface LinkPreset {
-  id: string;
-  name: string;
-  default_label: string;
-  icon: string; 
-  default_color: string;
-  default_text_color: string;
-}
-
-export interface CharacterLink {
-  id: string; 
-  character_id: string;
-  preset_id: string;
-  url: string;
-  custom_label?: string;
-  custom_color?: string;
-  caption?: string; 
-  custom_text_color?: string; 
-  expand?: {
-    preset_id?: LinkPreset;
-  };
+  includeTags: string[];
+  excludeTags: string[];
+  includeCategories: string[];
+  excludeCategories: string[];
 }

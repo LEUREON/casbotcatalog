@@ -4,19 +4,31 @@ import { X, User as UserIcon, Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, Mes
 import { useLocation, useNavigate } from "react-router-dom";
 import ThemedBackground from "../common/ThemedBackground";
 import { useAuth } from "../../contexts/AuthContext";
+import { motion } from "framer-motion";
 
-const ACCENT = "#f7cfe1"; 
+// === 🎨 DESIGN & ANIM CONSTANTS ===
+const DESIGN = {
+  colors: {
+    text: { primary: "#ffffff", muted: "#b0b0b0", accent: "#d7aefb" },
+    background: { glass: "rgba(40, 40, 50, 0.65)" },
+    border: "rgba(255, 255, 255, 0.08)",
+    accent: { primary: "#d7aefb", secondary: "#ff6bd6" },
+  },
+  shadows: { glass: "0 8px 32px rgba(0, 0, 0, 0.35)", button: "0 6px 20px rgba(255, 107, 214, 0.3)" },
+  fonts: { heading: `"Geist", "Inter", system-ui, sans-serif`, body: `"Geist", "Inter", system-ui, sans-serif` },
+};
+const ANIM = {
+  fadeInUp: (delay = 0) => ({
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.6, ease: [0.25, 0.1, 0.25, 1], delay },
+  }),
+  buttonTap: { whileTap: { scale: 0.97 } },
+};
 
-export const RegisterForm: React.FC<{onClose?: () => void; onSuccess?: () => void;}> = ({ onClose }) => {
+export const RegisterForm: React.FC<{onClose?: () => void; onSwitchToLogin?: () => void;}> = ({ onClose, onSwitchToLogin }) => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { register } = useAuth(); 
-
-  const next = useMemo(() => {
-    const sp = new URLSearchParams(location.search);
-    return sp.get("next") || "/";
-  }, [location.search]);
-
   const [username, setUsername] = useState(""); 
   const [nickname, setNickname] = useState(""); 
   const [email, setEmail] = useState("");
@@ -28,22 +40,14 @@ export const RegisterForm: React.FC<{onClose?: () => void; onSuccess?: () => voi
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!username || !nickname || !email || !password) {
-      setError("Заполните все поля");
-      return;
-    }
-    if (password.length < 8) {
-      setError("Пароль должен быть не менее 8 символов");
-      return;
-    }
+    if (!username || !nickname || !email || !password) { setError("Заполните все поля"); return; }
+    if (password.length < 8) { setError("Пароль должен быть не менее 8 символов"); return; }
     try {
       setLoading(true);
-      // ▼▼▼ ИЗМЕНЕНИЕ: Отправляем username и email в нижнем регистре ▼▼▼
-      const res = await register(username.toLowerCase(), nickname, email.toLowerCase(), password); 
-      // ▲▲▲ КОНЕЦ ▲▲▲
+      const res = await register(username.toLowerCase(), nickname, email.toLowerCase(), password);
       if (res.success) {
         if (onClose) onClose();
-        else navigate(next);
+        else navigate("/");
       } else {
         setError(res.message); 
       }
@@ -53,138 +57,95 @@ export const RegisterForm: React.FC<{onClose?: () => void; onSuccess?: () => voi
       setLoading(false);
     }
   };
-  
-  const goLogin = () => {
-    try {
-      navigate("/login");
-    } catch {
-      window.location.hash = "#/login";
+
+  const handleNavigation = (path: string) => {
+    if (onSwitchToLogin) {
+      onSwitchToLogin();
+    } else {
+      navigate(path);
     }
   };
 
   const CloseBtn = () => (
-    <button
+    <motion.button
+      {...ANIM.buttonTap}
       type="button"
       onClick={() => (onClose ? onClose() : navigate(-1))}
       aria-label="Закрыть"
-      className="absolute right-2 top-2 p-2 rounded-lg hover:bg-white/10 active:scale-95 transition text-[var(--accent)]"
+      className="absolute right-4 top-4 p-2 rounded-full transition-all duration-300"
+      style={{
+        background: DESIGN.colors.background.glass,
+        color: DESIGN.colors.text.primary,
+        border: `1px solid ${DESIGN.colors.border}`,
+        boxShadow: DESIGN.shadows.glass,
+      }}
     >
       <X className="w-5 h-5" />
-    </button>
+    </motion.button>
   );
 
   return (
-    <div className="fixed inset-0 z-[999]">
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-3" style={{ fontFamily: DESIGN.fonts.body }}>
       <ThemedBackground intensity={0.9} animated />
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
-      <div className="relative z-10 w-full h-full grid place-items-center p-3">
-        <div className="relative w-full max-w-sm mx-auto rounded-3xl border border-[var(--border)] bg-[var(--panel)] backdrop-blur-xl p-6 shadow-xl">
-          <CloseBtn />
-          <h1 className="text-xl font-semibold text-white mb-2">Регистрация</h1>
-          <p className="text-sm text-[var(--textSecondary)] mb-4">Логин, никнейм, почта и пароль (мин. 8 симв.)</p>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
 
-          {error && (
-            <div className="flex items-start gap-2 text-red-300 bg-red-500/10 border border-red-400/30 rounded-xl p-3 mb-3">
-              <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-              <span className="text-sm">{error}</span>
-            </div>
-          )}
+      <motion.div
+        {...ANIM.fadeInUp(0.2)}
+        className="relative z-10 w-full max-w-sm rounded-2xl"
+        style={{
+          background: DESIGN.colors.background.glass,
+          border: `1px solid ${DESIGN.colors.border}`,
+          boxShadow: DESIGN.shadows.glass,
+          padding: "2rem",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <CloseBtn />
+        <h1 className="text-2xl font-black mb-2 text-center" style={{ background: "linear-gradient(120deg, #ffffff 0%, #d7aefb 50%, #ff6bd6 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontFamily: DESIGN.fonts.heading }}>
+          Регистрация
+        </h1>
+        <p className="text-center mb-6" style={{ color: DESIGN.colors.text.muted }}>
+          Логин, никнейм, почта и пароль (мин. 8 симв.)
+        </p>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {/* Поле Логин (Username) */}
-            <div className="flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2 bg-white/[.03] focus-within:bg-white/[.05] transition">
-              <div className="w-9 h-9 rounded-lg border grid place-items-center border-white/15">
-                <UserIcon className="w-4 h-4 text-white/80" />
-              </div>
-              <input
-                id="username"
-                type="text"
-                autoComplete="username"
-                placeholder="Логин (для входа)"
-                className="bg-transparent outline-none text-white flex-1 placeholder:text-white/40"
-                value={username}
-                onChange={(e) => setUsername(e.target.value.trim())} // Убираем .toLowerCase() отсюда
-              />
-            </div>
-            
-            {/* Поле Никнейм (Nickname) */}
-            <div className="flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2 bg-white/[.03] focus-within:bg-white/[.05] transition">
-              <div className="w-9 h-9 rounded-lg border grid place-items-center border-white/15">
-                <MessageSquare className="w-4 h-4 text-white/80" />
-              </div>
-              <input
-                id="nickname"
-                type="text"
-                autoComplete="nickname"
-                placeholder="Никнейм (для чата)"
-                className="bg-transparent outline-none text-white flex-1 placeholder:text-white/40"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-              />
-            </div>
+        {error && (
+          <motion.div {...ANIM.buttonTap} className="flex items-start gap-3 p-4 mb-6 rounded-2xl" style={{ background: "rgba(255, 107, 107, 0.1)", border: `1px solid rgba(255, 107, 107, 0.3)`, boxShadow: "0 4px 16px rgba(255, 107, 107, 0.2)" }}>
+            <AlertCircle className="w-5 h-5 mt-0.5 shrink-0" style={{ color: "#ff6b6b" }} />
+            <span className="text-sm" style={{ color: "#ff6b6b" }}>{error}</span>
+          </motion.div>
+        )}
 
-            {/* Поле Email */}
-            <div className="flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2 bg-white/[.03] focus-within:bg-white/[.05] transition">
-              <div className="w-9 h-9 rounded-lg border grid place-items-center border-white/15">
-                <Mail className="w-4 h-4 text-white/80" />
-              </div>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                className="bg-transparent outline-none text-white flex-1 placeholder:text-white/40"
-                value={email}
-                onChange={(e) => setEmail(e.target.value.trim())} // Убираем .toLowerCase() отсюда
-              />
-            </div>
-
-            {/* Поле Пароль */}
-            <div className="flex items-center gap-3 rounded-xl border border-white/15 px-3 py-2 bg-white/[.03] focus-within:bg-white/[.05] transition">
-              <div className="w-9 h-9 rounded-lg border grid place-items-center border-white/15">
-                <Lock className="w-4 h-4 text-white/80" />
-              </div>
-              <input
-                id="password"
-                type={showPwd ? "text" : "password"}
-                autoComplete="new-password"
-                placeholder="••••••••"
-                className="bg-transparent outline-none text-white flex-1 placeholder:text-white/40"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPwd((v) => !v)}
-                className="p-2 rounded-lg hover:bg-white/10 transition"
-                aria-label={showPwd ? "Скрыть пароль" : "Показать пароль"}
-              >
-                {showPwd ? <EyeOff className="w-4 h-4 text-white/80" /> : <Eye className="w-4 h-4 text-white/80" />}
-              </button>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full h-11 rounded-xl px-4 py-2 font-medium text-black disabled:opacity-70"
-              style={{ background: ACCENT }}
-            >
-              {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Создаем…</span> : "Создать аккаунт"}
-            </button>
-          </form>
-          
-           <div className="mt-4 flex items-center justify-center text-sm">
-            <button
-              type="button"
-              onClick={goLogin}
-              className="text-white/80 hover:text-white transition underline-offset-4 hover:underline"
-              aria-label="Перейти ко входу"
-            >
-              Уже есть аккаунт? Войти
-            </button>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex h-14 items-center gap-3 rounded-2xl px-4" style={{ background: DESIGN.colors.background.glass, border: `1px solid ${DESIGN.colors.border}`, boxShadow: DESIGN.shadows.glass }}>
+            <div className="flex shrink-0 items-center justify-center"><UserIcon className="w-5 h-5" style={{ color: DESIGN.colors.text.muted }} /></div>
+            <input id="username" type="text" autoComplete="username" placeholder="Логин (для входа)" className="h-full w-full flex-1 bg-transparent text-sm placeholder:text-white/70 outline-none" style={{ color: DESIGN.colors.text.primary }} value={username} onChange={(e) => setUsername(e.target.value.trim())} />
           </div>
+          <div className="flex h-14 items-center gap-3 rounded-2xl px-4" style={{ background: DESIGN.colors.background.glass, border: `1px solid ${DESIGN.colors.border}`, boxShadow: DESIGN.shadows.glass }}>
+            <div className="flex shrink-0 items-center justify-center"><MessageSquare className="w-5 h-5" style={{ color: DESIGN.colors.text.muted }} /></div>
+            <input id="nickname" type="text" autoComplete="nickname" placeholder="Никнейм (для чата)" className="h-full w-full flex-1 bg-transparent text-sm placeholder:text-white/70 outline-none" style={{ color: DESIGN.colors.text.primary }} value={nickname} onChange={(e) => setNickname(e.target.value)} />
+          </div>
+          <div className="flex h-14 items-center gap-3 rounded-2xl px-4" style={{ background: DESIGN.colors.background.glass, border: `1px solid ${DESIGN.colors.border}`, boxShadow: DESIGN.shadows.glass }}>
+            <div className="flex shrink-0 items-center justify-center"><Mail className="w-5 h-5" style={{ color: DESIGN.colors.text.muted }} /></div>
+            <input id="email" type="email" autoComplete="email" placeholder="you@example.com" className="h-full w-full flex-1 bg-transparent text-sm placeholder:text-white/70 outline-none" style={{ color: DESIGN.colors.text.primary }} value={email} onChange={(e) => setEmail(e.target.value.trim())} />
+          </div>
+          <div className="flex h-14 items-center gap-3 rounded-2xl px-4" style={{ background: DESIGN.colors.background.glass, border: `1px solid ${DESIGN.colors.border}`, boxShadow: DESIGN.shadows.glass }}>
+            <div className="flex shrink-0 items-center justify-center"><Lock className="h-5 w-5" style={{ color: DESIGN.colors.text.muted }} /></div>
+            <input id="password" type={showPwd ? "text" : "password"} autoComplete="new-password" placeholder="••••••••" className="h-full w-full flex-1 bg-transparent text-sm placeholder:text-white/70 outline-none" style={{ color: DESIGN.colors.text.primary }} value={password} onChange={(e) => setPassword(e.target.value)} />
+            <motion.button {...ANIM.buttonTap} type="button" onClick={() => setShowPwd(v => !v)} className="flex shrink-0 items-center justify-center p-2 rounded-full transition-colors hover:bg-white/10" style={{ color: DESIGN.colors.text.muted }}>
+              {showPwd ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+            </motion.button>
+          </div>
+          <motion.button {...ANIM.buttonTap} type="submit" disabled={loading} className="w-full h-12 rounded-full font-bold text-sm" style={{ background: `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`, color: "#ffffff", boxShadow: DESIGN.shadows.button }}>
+            {loading ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Создаем…</span> : "Создать аккаунт"}
+          </motion.button>
+        </form>
+        <div className="mt-6 text-center">
+          <p className="text-sm mb-2" style={{ color: DESIGN.colors.text.muted }}>Уже есть аккаунт?</p>
+          <motion.button {...ANIM.buttonTap} type="button" onClick={() => handleNavigation('/login')} className="text-sm font-bold" style={{ color: DESIGN.colors.accent.primary }}>
+            Войти
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }; 

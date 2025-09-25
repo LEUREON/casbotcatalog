@@ -1,271 +1,172 @@
-// project/src/components/Admin/AdminShop.tsx
+// src/components/Admin/AdminShop.tsx
+import React, { useState } from "react";
+import { Plus, Edit, Trash2 } from "lucide-react";
+import { useData } from "../../contexts/DataContext";
+import { ShopItem } from "../../types";
+import { GlassPanel } from "../ui/GlassPanel";
+import { motion } from "framer-motion";
+import { ANIM } from "../../lib/animations";
 
-import React, { useState } from 'react';
-import { ShoppingBag, Plus, Edit, Trash2, Save, X, Loader2 } from 'lucide-react';
-import { useData } from '../../contexts/DataContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ShopItem } from '../../types';
+const INPUT_CLS = "w-full rounded-lg px-4 py-2.5 bg-white/5 border border-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-accent-primary/50 transition-all";
+const BUTTON_PRIMARY_CLS = "flex items-center justify-center gap-2 px-4 py-2 rounded-full font-bold text-sm text-white transition-all duration-300 bg-gradient-to-r from-accent-primary to-accent-secondary";
+const BUTTON_SECONDARY_CLS = "flex items-center justify-center gap-2 px-4 py-2 rounded-full font-medium text-sm bg-white/10 border border-white/20 text-text-secondary hover:bg-white/20 transition-all";
 
-// --- Стили ---
-const ACCENT = "#f7cfe1";
-const BORDER = "rgba(255,255,255,0.10)";
-
-function surfaceStyle({
-  elevated = false,
-}: { elevated?: boolean } = {}) {
-  const baseAlpha = elevated ? 0.09 : 0.07;
-  return {
-    background: `rgba(255,255,255,${baseAlpha})`,
-    border: `1px solid ${BORDER}`,
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
-  } as React.CSSProperties;
-}
-
-const INPUT_CLS = "w-full rounded-xl px-4 py-2.5 bg-black/[.15] border border-white/15 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-[var(--accent)]/50";
-const SELECT_CLS = INPUT_CLS + " pr-10 appearance-none";
-const TEXTAREA_CLS = INPUT_CLS + " min-h-[100px] resize-y";
-const FILE_INPUT_CLS = "w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-white/10 file:text-white hover:file:bg-white/20";
-
-// --- Тип для состояния формы ---
-type FormState = {
-  name: string;
-  description: string;
-  price: number;
-  category: string;
-  isActive: boolean;
-  imageFile: File | null;
-  actionButtons: string; // Храним JSON как строку для textarea
+type ActionButton = {
+  label: string;
+  url: string;
 };
 
-const defaultFormState: FormState = {
-  name: '',
-  description: '',
-  price: 0,
-  category: '',
-  isActive: true,
-  imageFile: null,
-  actionButtons: '[]',
-};
-
-// --- Основной компонент ---
 export function AdminShop() {
   const { shopItems, addShopItem, updateShopItem, deleteShopItem } = useData();
   const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [formData, setFormData] = useState<FormState>(defaultFormState);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [formData, setFormData] = useState<Partial<ShopItem>>({
+    name: "",
+    description: "",
+    price: 0,
+    category: "",
+    isActive: true,
+    actionButtons: [],
+  });
 
-  const clearMessage = () => setTimeout(() => setMessage(null), 4000);
-
-  // --- Обработчики ---
-
-  const handleCancel = () => {
+  const resetForm = () => {
+    setFormData({
+      name: "",
+      description: "",
+      price: 0,
+      category: "",
+      isActive: true,
+      actionButtons: [],
+    });
+    setImageFile(null);
     setEditingItem(null);
-    setFormData(defaultFormState);
-    setShowAddForm(false);
-    setMessage(null);
+    setShowForm(false);
   };
 
-  const handleEdit = (item: ShopItem) => {
+  const startEdit = (item: ShopItem) => {
     setEditingItem(item);
     setFormData({
-      name: item.name,
-      description: item.description,
-      price: item.price,
-      category: item.category,
-      isActive: item.isActive,
-      imageFile: null, // Файл сбрасывается, загружаем новый только при необходимости
-      actionButtons: JSON.stringify(item.actionButtons || []), // Конвертируем массив в JSON-строку
+      ...item,
+      actionButtons: Array.isArray(item.actionButtons) ? item.actionButtons : [],
     });
-    setShowAddForm(true);
-    setMessage(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm('Вы уверены, что хотите удалить этот товар?')) {
-      await deleteShopItem(id);
-      setMessage({ type: 'success', text: 'Товар удален.' });
-      clearMessage();
-    }
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name || !formData.category) {
-        setMessage({ type: 'error', text: 'Название и категория обязательны.' });
-        clearMessage();
-        return;
-    }
-    
-    setIsSubmitting(true);
-    setMessage(null);
-
     const data = new FormData();
-    data.append('name', formData.name);
-    data.append('description', formData.description);
-    data.append('price', String(formData.price));
-    data.append('category', formData.category);
-    data.append('isActive', String(formData.isActive));
-    data.append('actionButtons', formData.actionButtons); // Отправляем JSON как строку
+    Object.entries(formData).forEach(([key, value]) => {
+      if (key === 'image') return;
+      if (key === 'actionButtons') {
+        data.append(key, JSON.stringify(value || []));
+      } else if (value !== null && value !== undefined) {
+        data.append(key, String(value));
+      }
+    });
 
-    if (formData.imageFile) {
-        data.append('image', formData.imageFile);
+    if (imageFile) {
+      data.append('image', imageFile);
     }
 
-    try {
-      if (editingItem) {
-        await updateShopItem(editingItem.id, data);
-        setMessage({ type: 'success', text: 'Товар успешно обновлен!' });
-      } else {
-        await addShopItem(data);
-        setMessage({ type: 'success', text: 'Товар успешно создан!' });
-      }
-      handleCancel();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: `Ошибка: ${err.message || 'Не удалось сохранить товар.'}` });
-    } finally {
-      setIsSubmitting(false);
-      clearMessage();
+    if (editingItem) {
+      await updateShopItem(editingItem.id, data);
+    } else {
+      await addShopItem(data);
+    }
+    resetForm();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm("Вы уверены, что хотите удалить этот товар?")) {
+      await deleteShopItem(id);
     }
   };
 
-  // --- JSX ---
+  const addActionButton = () => {
+    setFormData(prev => ({
+      ...prev,
+      actionButtons: [...(prev.actionButtons || []), { label: "Купить", url: "" }],
+    }));
+  };
+
+  const updateActionButton = (index: number, field: keyof ActionButton, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      actionButtons: (prev.actionButtons || []).map((btn, i) => i === index ? { ...btn, [field]: value } : btn),
+    }));
+  };
+
+  const removeActionButton = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      actionButtons: (prev.actionButtons || []).filter((_, i) => i !== index),
+    }));
+  };
 
   return (
-    <div className="p-4 sm:p-6">
-      {/* Заголовок и кнопка "Добавить" */}
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl sm:text-2xl font-bold text-white">Управление магазином</h2>
-        <button 
-          onClick={() => { handleCancel(); setShowAddForm(true); }} 
-          className="flex items-center space-x-2 px-4 py-2 rounded-xl font-medium text-black" 
-          style={{ background: ACCENT }}
-        >
-          <Plus className="h-4 w-4" />
-          <span>Добавить товар</span>
-        </button>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-xl sm:text-2xl font-bold">Управление магазином</h2>
+        <motion.button {...ANIM.buttonTap} onClick={() => { resetForm(); setShowForm(true); }} className={BUTTON_PRIMARY_CLS}>
+          <Plus size={16} /> Добавить товар
+        </motion.button>
       </div>
 
-      {message && (
-        <div className={`mb-4 p-3 rounded-xl border text-sm ${message.type === 'success' ? 'bg-green-500/20 border-green-500/30 text-green-300' : 'bg-red-500/20 border-red-500/30 text-red-300'}`}>
-          {message.text}
-        </div>
+      {showForm && (
+        <GlassPanel delay={0.1}>
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <h3 className="text-lg font-bold">
+              {editingItem ? `Редактирование: ${editingItem.name}` : "Новый товар"}
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div><label className="block text-sm mb-1.5">Название</label><input type="text" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className={INPUT_CLS} required /></div>
+              <div><label className="block text-sm mb-1.5">Цена (в рублях)</label><input type="number" value={formData.price} onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} className={INPUT_CLS} required /></div>
+              <div className="sm:col-span-2"><label className="block text-sm mb-1.5">Категория</label><input type="text" value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} className={INPUT_CLS} /></div>
+              <div className="sm:col-span-2"><label className="block text-sm mb-1.5">Описание</label><textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className={INPUT_CLS} rows={3}></textarea></div>
+              <div className="sm:col-span-2"><label className="block text-sm mb-1.5">Изображение</label><input type="file" onChange={e => setImageFile(e.target.files?.[0] || null)} className={`${INPUT_CLS} p-0 file:mr-4 file:rounded-lg file:border-0 file:bg-white/10 file:px-4 file:py-2.5 file:text-white hover:file:bg-white/20 transition-colors`} /></div>
+              
+              <div className="sm:col-span-2"><label className="block text-sm mb-1.5">Кнопки действий</label>
+                <div className="space-y-3">
+                  {(formData.actionButtons || []).map((btn, i) => (
+                    <div key={i} className="p-3 rounded-lg border border-white/10 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input type="text" placeholder="Текст кнопки" value={btn.label} onChange={e => updateActionButton(i, "label", e.target.value)} className={INPUT_CLS} />
+                      <input type="url" placeholder="URL (https://...)" value={btn.url} onChange={e => updateActionButton(i, "url", e.target.value)} className={INPUT_CLS} />
+                      <button type="button" onClick={() => removeActionButton(i)} className="sm:col-span-2 text-xs text-red-400 hover:text-red-300 transition-colors text-left">Удалить кнопку</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addActionButton} className={BUTTON_SECONDARY_CLS}>+ Добавить кнопку</button>
+                </div>
+              </div>
+              
+              <div className="sm:col-span-2 flex items-center gap-2"><input type="checkbox" checked={formData.isActive} onChange={e => setFormData({ ...formData, isActive: e.target.checked })} id="isActiveCheckbox" className="w-4 h-4" /><label htmlFor="isActiveCheckbox" className="text-sm">Активный товар</label></div>
+            </div>
+            <div className="flex gap-3 pt-4 border-t border-white/10">
+              <motion.button type="button" {...ANIM.buttonTap} onClick={resetForm} className={BUTTON_SECONDARY_CLS}>Отмена</motion.button>
+              <motion.button type="submit" {...ANIM.buttonTap} className={`${BUTTON_PRIMARY_CLS} flex-1`}>
+                Сохранить товар
+              </motion.button>
+            </div>
+          </form>
+        </GlassPanel>
       )}
 
-      {/* Форма добавления/редактирования */}
-      <AnimatePresence>
-        {showAddForm && (
-          <motion.div 
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="rounded-2xl mb-6 overflow-hidden" 
-            style={surfaceStyle({ elevated: true })}
-          >
-            <form onSubmit={handleSubmit} className="p-4 sm:p-6">
-              <h3 className="text-xl font-bold text-white mb-4">{editingItem ? 'Редактировать' : 'Добавить'} товар</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Название */}
-                <div>
-                  <label className="block text-sm mb-2">Название</label>
-                  <input type="text" value={formData.name} onChange={(e) => setFormData(f => ({ ...f, name: e.target.value }))} className={INPUT_CLS} required />
-                </div>
-                {/* Категория */}
-                <div>
-                  <label className="block text-sm mb-2">Категория</label>
-                  <input type="text" value={formData.category} onChange={(e) => setFormData(f => ({ ...f, category: e.target.value }))} className={INPUT_CLS} placeholder="Например: Промокод" required />
-                </div>
-                {/* Описание */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm mb-2">Описание</label>
-                  <textarea value={formData.description} onChange={(e) => setFormData(f => ({ ...f, description: e.target.value }))} className={TEXTAREA_CLS} />
-                </div>
-                {/* Цена */}
-                <div>
-                  <label className="block text-sm mb-2">Цена (в рублях)</label>
-                  <input type="number" value={formData.price} onChange={(e) => setFormData(f => ({ ...f, price: parseFloat(e.target.value) || 0 }))} className={INPUT_CLS} min={0} />
-                </div>
-                {/* Активность */}
-                <div>
-                  <label className="block text-sm mb-2">Активен</label>
-                  <select value={String(formData.isActive)} onChange={(e) => setFormData(f => ({ ...f, isActive: e.target.value === 'true' }))} className={SELECT_CLS}>
-                    <option value="true">Да (виден в магазине)</option>
-                    <option value="false">Нет (скрыт)</option>
-                  </select>
-                </div>
-                {/* Изображение */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm mb-2">Изображение (оставьте пустым, чтобы не менять)</label>
-                  <input 
-                    type="file" 
-                    onChange={(e) => setFormData(f => ({ ...f, imageFile: e.target.files ? e.target.files[0] : null }))} 
-                    accept="image/*" 
-                    className={FILE_INPUT_CLS}
-                  />
-                </div>
-                 {/* Action Buttons (JSON) */}
-                 <div className="md:col-span-2">
-                  <label className="block text-sm mb-2">Кнопки (JSON массив)</label>
-                  <textarea 
-                    value={formData.actionButtons} 
-                    onChange={(e) => setFormData(f => ({ ...f, actionButtons: e.target.value }))} 
-                    className={TEXTAREA_CLS}
-                    placeholder='[{"label": "Купить", "url": "https://..."}]'
-                  />
-                  <p className="text-xs text-slate-400 mt-1">Введите валидный JSON или оставьте `[]`.</p>
-                </div>
-              </div>
-
-              {/* Кнопки формы */}
-              <div className="flex space-x-2 pt-4 mt-4 border-t border-white/10">
-                <button type="submit" disabled={isSubmitting} className="flex-1 flex items-center justify-center space-x-2 px-6 py-3 rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 font-bold text-black" style={{background: ACCENT}}>
-                  {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                  <span>{isSubmitting ? 'Сохранение...' : (editingItem ? 'Сохранить' : 'Добавить товар')}</span>
-                </button>
-                <button type="button" onClick={handleCancel} className="px-5 py-3 rounded-xl border" style={{borderColor: BORDER, background: 'rgba(255,255,255,0.05)'}}>
-                  <X size={18} />
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-
-      {/* Список товаров */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="space-y-4">
         {shopItems.map((item) => (
-          <div key={item.id} className="rounded-2xl p-4 flex flex-col" style={surfaceStyle()}>
-            <div className="flex items-start gap-4">
-              <img 
-                src={item.image ? item.image : `https://placehold.co/80x80/222/555?text=${item.name.charAt(0)}`} 
-                alt={item.name}
-                className="w-20 h-20 rounded-xl object-cover border" 
-                style={{borderColor: BORDER}}
-              />
+          <GlassPanel key={item.id}>
+            <div className="flex items-center gap-4">
+              <img src={item.image} alt={item.name} className="w-16 h-16 rounded-xl object-cover border border-white/10" />
               <div className="min-w-0 flex-1">
-                <span className={`text-xs px-2 py-0.5 rounded ${item.isActive ? 'bg-green-500/20 text-green-300' : 'bg-slate-700 text-slate-400'}`}>
-                  {item.isActive ? 'Активен' : 'Скрыт'}
-                </span>
-                <p className="font-bold text-white truncate mt-1">{item.name}</p>
-                <p className="text-sm text-slate-400">{item.category}</p>
-                <p className="text-lg font-semibold text-white mt-1">{item.price} ₽</p>
+                <div className="font-semibold truncate">{item.name}</div>
+                <div className="text-sm opacity-80 truncate">{item.price} ₽</div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <motion.button {...ANIM.buttonTap} onClick={() => startEdit(item)} className={BUTTON_SECONDARY_CLS}><Edit size={16} /></motion.button>
+                <motion.button {...ANIM.buttonTap} onClick={() => handleDelete(item.id)} className={`${BUTTON_SECONDARY_CLS} !text-red-400 hover:!bg-red-500/20`}><Trash2 size={16} /></motion.button>
               </div>
             </div>
-            <div className="flex gap-2 mt-4 pt-4 border-t border-white/10">
-                <button onClick={() => handleEdit(item)} className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm border" style={{borderColor: BORDER, background: "rgba(255,255,255,0.03)"}}>
-                    <Edit size={16} /> Ред.
-                </button>
-                <button onClick={() => handleDelete(item.id)} className="p-2.5 rounded-xl border text-red-400" style={{borderColor: BORDER, background: "rgba(255,255,255,0.03)"}}>
-                    <Trash2 size={16} />
-                </button>
-            </div>
-          </div>
+          </GlassPanel>
         ))}
       </div>
     </div>

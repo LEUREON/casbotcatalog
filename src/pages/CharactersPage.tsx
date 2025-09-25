@@ -1,353 +1,259 @@
-// project/src/pages/CharactersPage.tsx
-import React, { useEffect, useMemo, useState } from "react";
+// src/pages/CharactersPage.tsx
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import ThemedBackground from "../components/common/ThemedBackground";
-import {
-  Search,
-  SlidersHorizontal,
-  Frown,
-  Users,
-  Venus,
-  Mars,
-  CakeSlice,
-  Infinity as InfinityIcon,
-  Star,
-  Clock,
-  ArrowDownAZ,
-  X,
-  RotateCcw,
-} from "lucide-react";
-
 import { useData } from "../contexts/DataContext";
-import { Character } from "../types";
 import { CharacterCard } from "../components/Characters/CharacterCard";
-import { CharacterCardSkeleton } from "../components/Characters/CharacterCardSkeleton"; 
+import { CharacterCardSkeleton } from "../components/Characters/CharacterCardSkeleton";
 import { useDebounce } from "../utils/useDebounce";
 
-/* ===== UI TOKENS ===== */
-const TOKENS = {
-  border: "rgba(255,255,255,0.12)",
-  itemBg: "rgba(255,255,255,0.04)",
-  itemBgActive: "rgba(255,255,255,0.10)",
-  accent: "#f7cfe1",
+import { GlassPanel } from "../components/ui/GlassPanel";
+import { SearchBar } from "../components/ui/SearchBar";
+import { FilterChip } from "../components/ui/FilterChip";
+import { ANIM } from "../lib/animations";
+
+import {
+  Users, Mars, Venus, Cake, Clock, Star, Frown, RotateCcw,
+  ArrowDownAZ, Infinity as InfinityIcon, Check, X, Minus, Tag
+} from "lucide-react";
+
+const TagFilterChip = ({ tag, status, onClick }: { tag: string, status: 'include' | 'exclude' | 'off', onClick: () => void }) => {
+  const baseClasses = "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 cursor-pointer";
+  
+  const styles = {
+    off: 'bg-badge-tag text-text-secondary border-default hover:bg-glass-hover',
+    include: 'bg-green-500/20 text-green-300 border-green-500/30 filter drop-shadow-[0_0_4px_rgba(74,222,128,0.5)]',
+    exclude: 'bg-red-500/20 text-red-300 border-red-500/30 filter drop-shadow-[0_0_4px_rgba(248,113,113,0.5)]',
+  };
+
+  return (
+    <motion.button {...ANIM.buttonTap} onClick={onClick} className={`${baseClasses} ${styles[status]}`}>
+      <span>{tag}</span>
+    </motion.button>
+  );
 };
 
-/* ===== Матовая панель ===== */
-function MattePanel(
-  props: React.PropsWithChildren<{ className?: string; border?: boolean }>
-) {
-  const { className = "", border = true, children } = props;
-  return (
-    <div
-      className={[
-        "rounded-2xl sm:rounded-3xl p-4 sm:p-6",
-        "backdrop-blur-md bg-[rgba(255,255,255,0.04)]",
-        border ? "border" : "",
-        className,
-      ].join(" ")}
-      style={{
-        borderColor: TOKENS.border,
-        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
 
-/* ===== Чип фильтра ===== */
-function FilterChip({
-  icon: Icon,
-  label,
-  active,
-  onClick,
-}: {
-  icon?: React.ComponentType<{ className?: string }>;
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={[
-        "group inline-flex items-center gap-2 px-3.5 py-2 rounded-full text-sm",
-        "transition-colors",
-        "border",
-      ].join(" ")}
-      style={
-        active
-          ? {
-              background: TOKENS.itemBgActive,
-              borderColor: TOKENS.accent,
-              color: "#fff",
-              boxShadow: `0 0 0 1px ${TOKENS.accent} inset`,
-            }
-          : {
-              background: TOKENS.itemBg,
-              borderColor: TOKENS.border,
-              color: "#d1d5db",
-            }
-      }
-    >
-      {Icon && <Icon className="h-4 w-4" />}
-      <span>{label}</span>
-    </button>
-  );
-}
-
-/* ===== Поисковая строка с кнопками ===== */
-function SearchBar({
-  value,
-  onChange,
-  onClear,
-  onToggleFilters,
-  filtersOpen,
-  onReset,
-  activeCount,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onClear: () => void;
-  onToggleFilters: () => void;
-  filtersOpen: boolean;
-  onReset: () => void;
-  activeCount: number;
-}) {
-  const hasActive = activeCount > 0;
-  return (
-    <div className="relative">
-      <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 z-10" />
-      <input
-        type="text"
-        placeholder="Поиск..."
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full h-14 pl-12 pr-40 sm:pr-56 rounded-2xl text-white placeholder:text-slate-400 focus:outline-none"
-        style={{
-          background: "rgba(255,255,255,0.05)",
-          border: `1px solid ${TOKENS.border}`,
-        }}
-      />
-
-      <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 sm:gap-2">
-        {hasActive && (
-          <button
-            onClick={onReset}
-            className="inline-flex items-center gap-2 h-10 px-3.5 rounded-xl text-sm"
-            title="Сбросить все фильтры"
-            aria-label="Сбросить все фильтры"
-            style={{
-              border: `1px solid ${TOKENS.border}`,
-              background: TOKENS.itemBg,
-              color: "#e5e7eb",
-            }}
-          >
-            <RotateCcw className="h-4 w-4" />
-            <span className="hidden sm:inline">Сбросить</span>
-          </button>
-        )}
-
-               <button
-          onClick={onToggleFilters}
-          aria-pressed={filtersOpen}
-          className="relative inline-flex items-center gap-2 h-10 px-3.5 rounded-xl text-sm"
-          style={
-            filtersOpen
-              ? {
-                  background: TOKENS.itemBgActive,
-                  border: `1px solid ${TOKENS.accent}`,
-                  color: "#fff",
-                  boxShadow: `0 0 0 1px ${TOKENS.accent} inset`,
-                }
-              : {
-                  background: TOKENS.itemBg,
-                  border: `1px solid ${TOKENS.border}`,
-                  color: "#e5e7eb",
-                }
-          }
-        >
-          <SlidersHorizontal className="h-4 w-4" />
-          <span className="hidden sm:inline">Фильтры</span>
-          {hasActive && (
-            <span
-              className="ml-1 min-w-[18px] h-[18px] px-1 rounded-full text-[11px] leading-[18px] font-semibold text-black text-center"
-              style={{ background: TOKENS.accent, border: `1px solid ${TOKENS.border}` }}
-            >
-              {activeCount > 9 ? "9+" : String(activeCount)}
-            </span>
-          )}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
-
-/* ===== Страница ===== */
 export function CharactersPage() {
   const navigate = useNavigate();
-  const { characters, filteredCharacters, filters, setFilters, charactersLoading } = useData();
+  const { characters, filters, setFilters, charactersLoading } = useData();
 
   const [searchLocal, setSearchLocal] = useState(filters.search ?? "");
-  const [showFilters, setShowFilters] = useState(false); // по умолчанию закрыты
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const debouncedSearch = useDebounce(searchLocal, 250);
+  const [showFilters, setShowFilters] = useState(false);
+  const debouncedSearch = useDebounce(searchLocal, 300);
 
-  // дефолтные фильтры один раз
-  useEffect(() => {
-    const defaults = { search: "", gender: "all", ageGroup: "all", sortBy: "newest" as const };
-    setFilters(defaults);
-    setSearchLocal("");
-    setSelectedTags([]);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const { scrollY } = useScroll();
+  const bgIntensity = useTransform(scrollY, [0, 500], [0.3, 0.1]);
 
   useEffect(() => {
-    if (debouncedSearch !== filters.search) {
-      setFilters({ ...filters, search: debouncedSearch });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedSearch]);
+    return () => {
+      setFilters(prev => ({ ...prev, search: "", gender: "all", ageGroup: "all", sortBy: "newest", includeTags: [], excludeTags: [], category: [] }));
+    };
+  }, [setFilters]);
 
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    characters.forEach((c) => (c.tags || []).forEach((t) => set.add(t)));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  useEffect(() => {
+    setFilters(prev => ({ ...prev, search: debouncedSearch }));
+  }, [debouncedSearch, setFilters]);
+
+  const allCategories = useMemo(() => {
+    const categorySet = new Set<string>();
+    characters.forEach(c => (c.category || []).forEach(cat => categorySet.add(cat)));
+    return Array.from(categorySet).sort((a,b) => a.localeCompare(b));
   }, [characters]);
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
-  };
+  // ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ: Логика клика по категории ▼▼▼
+  const handleCategoryClick = useCallback((cat: string) => {
+    setFilters(prev => {
+      const isIncluded = prev.includeCategories.includes(cat);
+      const isExcluded = prev.excludeCategories.includes(cat);
 
-  const view = useMemo(() => {
-    let list = filteredCharacters as Character[];
-    if (selectedTags.length) {
-      list = list.filter((c) => selectedTags.every((t) => (c.tags || []).includes(t)));
-    }
-    return list;
-  }, [filteredCharacters, selectedTags]);
+      if (!isIncluded && !isExcluded) {
+        // off -> include
+        return { ...prev, includeCategories: [...prev.includeCategories, cat] };
+      } else if (isIncluded) {
+        // include -> exclude
+        return {
+          ...prev,
+          includeCategories: prev.includeCategories.filter(c => c !== cat),
+          excludeCategories: [...prev.excludeCategories, cat]
+        };
+      } else {
+        // exclude -> off
+        return { ...prev, excludeCategories: prev.excludeCategories.filter(c => c !== cat) };
+      }
+    });
+  }, [setFilters]);
+  // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
+  
+  const finalFilteredCharacters = useMemo(() => {
+    return characters
+      .filter(char => {
+        const term = (filters.search || "").toLowerCase();
+        const searchMatch = !term ||
+          char.name.toLowerCase().includes(term) ||
+          (char.occupation || "").toLowerCase().includes(term) ||
+          (char.description || "").toLowerCase().includes(term) ||
+          (char.tags || []).some(t => t.toLowerCase().includes(term));
+        
+        const genderMatch = filters.gender === 'all' || char.gender === filters.gender;
+        const ageGroupMatch = filters.ageGroup === 'all' || char.ageGroup === filters.ageGroup;
+        
+        const includeTagsMatch = filters.includeTags.length === 0 || 
+          filters.includeTags.every(tag => char.tags.includes(tag));
+          
+        const excludeTagsMatch = filters.excludeTags.length === 0 || 
+          !filters.excludeTags.some(tag => char.tags.includes(tag));
 
-  const resultCount = view.length;
+        const includeCategoriesMatch = filters.includeCategories.length === 0 ||
+          filters.includeCategories.some(cat => (char.category || []).includes(cat));
 
-  // активные фильтры (newest не считаем активным)
-  let activeCount = 0;
-  if (filters.gender !== "all") activeCount++;
-  if (filters.ageGroup !== "all") activeCount++;
-  if (filters.sortBy !== "newest") activeCount++;
-  if (searchLocal.trim()) activeCount++;
-  activeCount += selectedTags.length;
+        const excludeCategoriesMatch = filters.excludeCategories.length === 0 ||
+          !filters.excludeCategories.some(cat => (char.category || []).includes(cat));
+          
+        return searchMatch && genderMatch && ageGroupMatch && includeTagsMatch && excludeTagsMatch && includeCategoriesMatch && excludeCategoriesMatch;
+      })
+      .sort((a, b) => {
+        if (filters.sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
+        if (filters.sortBy === "name") return a.name.localeCompare(b.name);
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  }, [characters, filters]);
+  
+  const activeCount =
+    (filters.gender !== "all" ? 1 : 0) +
+    (filters.ageGroup !== "all" ? 1 : 0) +
+    (filters.sortBy !== "newest" ? 1 : 0) +
+    filters.includeTags.length +
+    filters.excludeTags.length +
+    filters.includeCategories.length +
+    filters.excludeCategories.length;
 
   const resetFilters = () => {
-    setFilters({ search: "", gender: "all", ageGroup: "all", sortBy: "newest" });
-    setSelectedTags([]);
+    setFilters({ search: "", gender: "all", ageGroup: "all", sortBy: "newest", includeTags: [], excludeTags: [], includeCategories: [], excludeCategories: [] });
     setSearchLocal("");
   };
 
-  // Уменьшенные отступы: ближе к краям, единая ширина для поиска/фильтров/сеток
-  const containerCls = "mx-auto w-full max-w-none px-2 sm:px-3 lg:px-4";
-
   return (
-    <div className="min-h-screen w-full relative">
-      <ThemedBackground />
+    <div 
+      className="min-h-screen w-full relative"
+      style={{ 
+        fontFamily: "var(--font-family-body)", 
+        backgroundColor: "var(--bg)", 
+        color: "var(--text-primary)" 
+      }}
+    >
+      <ThemedBackground intensity={bgIntensity} />
+      <div className="relative z-10 mx-auto w-full max-w-none px-2 sm:px-3 lg:px-4 py-4 lg:py-8">
+        
+        <motion.div {...ANIM.fadeInUp(0.1)} className="mb-8 text-center">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black leading-tight" style={{ background: "linear-gradient(120deg, #ffffff 0%, #d7aefb 50%, #ff6bd6 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", color: "transparent", fontFamily: "var(--font-family-heading)", textShadow: "0 4px 12px rgba(0,0,0,0.2)"}}>
+            👤 Каталог персонажей
+          </h1>
+          <p className="mt-2 text-base sm:text-lg" style={{ color: "var(--text-muted)" }}>
+            Найдите своего идеального собеседника
+          </p>
+        </motion.div>
 
-      <div className={`relative z-10 ${containerCls} py-3 lg:py-6`}>
-        {/* Поиск — та же ширина, что и сетка карточек */}
-        <MattePanel className="mb-3">
-          <SearchBar
-            value={searchLocal}
-            onChange={setSearchLocal}
-            onClear={() => setSearchLocal("")}
-            onToggleFilters={() => setShowFilters((v) => !v)}
-            filtersOpen={showFilters}
-            onReset={resetFilters}
-            activeCount={activeCount}
-          />
-        </MattePanel>
+        <GlassPanel 
+          delay={0.2} 
+          className="mb-6"
+          style={{ background: "var(--glass)", border: "1px solid var(--border)", boxShadow: "0 8px 32px rgba(0, 0, 0, 0.35)", backdropFilter: "blur(16px)"}}
+        >
+          <SearchBar value={searchLocal} onChange={setSearchLocal} onToggleFilters={() => setShowFilters((v) => !v)} filtersOpen={showFilters} activeCount={activeCount} isLoading={charactersLoading}/>
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.3, ease: 'easeInOut' }} className="overflow-hidden"
+              >
+                <div className="border-t border-border mt-4 pt-4">
+                  <div className="flex justify-between items-center mb-4 px-1">
+                      <h3 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>Фильтры</h3>
+                      <motion.button {...ANIM.buttonTap} onClick={resetFilters} className="inline-flex items-center gap-2 h-9 px-3 rounded-full text-sm font-medium" style={{ background: "linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))", color: "#ffffff", border: "none", boxShadow: "0 4px 16px rgba(215, 174, 251, 0.0)"}}>
+                          <RotateCcw size={14} /> <span>Сбросить</span>
+                      </motion.button>
+                  </div>
 
-        {/* Фильтры — по умолчанию закрыты, при открытии совпадают по ширине с поиском/сеткой */}
-        {showFilters ? (
-          <MattePanel className="mb-5">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-              <div>
-                <div className="text-slate-300 text-xs uppercase tracking-wider mb-2">Пол</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <FilterChip icon={Users} label="Все" active={filters.gender === "all"} onClick={() => setFilters({ ...filters, gender: "all" })} />
-                  <FilterChip icon={Mars} label="Муж" active={filters.gender === "male"} onClick={() => setFilters({ ...filters, gender: "male" })} />
-                  <FilterChip icon={Venus} label="Жен" active={filters.gender === "female"} onClick={() => setFilters({ ...filters, gender: "female" })} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5 p-1">
+                      <div>
+                        <h4 className="text-sm uppercase tracking-wider mb-3 font-bold" style={{ color: "var(--text-muted)" }}>Пол</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <FilterChip icon={Users} label="Все" active={filters.gender === "all"} onClick={() => setFilters({ ...filters, gender: "all" })} />
+                          <FilterChip icon={Mars} label="Мужчины" active={filters.gender === "male"} onClick={() => setFilters({ ...filters, gender: "male" })} />
+                          <FilterChip icon={Venus} label="Женщины" active={filters.gender === "female"} onClick={() => setFilters({ ...filters, gender: "female" })} />
+                        </div>
+                      </div>
+                      <div>
+                        <h4 className="text-sm uppercase tracking-wider mb-3 font-bold" style={{ color: "var(--text-muted)" }}>Возраст</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <FilterChip icon={Users} label="Все" active={filters.ageGroup === "all"} onClick={() => setFilters({ ...filters, ageGroup: "all" })} />
+                          <FilterChip icon={Cake} label="18+" active={filters.ageGroup === "18+"} onClick={() => setFilters({ ...filters, ageGroup: "18+" })} />
+                          <FilterChip icon={Clock} label="45+" active={filters.ageGroup === "45+"} onClick={() => setFilters({ ...filters, ageGroup: "45+" })} />
+                          <FilterChip icon={InfinityIcon} label="Бессмертные" active={filters.ageGroup === "immortal"} onClick={() => setFilters({ ...filters, ageGroup: "immortal" })} />
+                        </div>
+                      </div>
+                      <div className="md:col-span-2">
+                        <h4 className="text-sm uppercase tracking-wider mb-3 font-bold" style={{ color: "var(--text-muted)" }}>Сортировка</h4>
+                        <div className="flex flex-wrap gap-2">
+                          <FilterChip icon={Clock} label="Сначала новые" active={filters.sortBy === "newest"} onClick={() => setFilters({ ...filters, sortBy: "newest" })} />
+                          <FilterChip icon={Star} label="По рейтингу" active={filters.sortBy === "rating"} onClick={() => setFilters({ ...filters, sortBy: "rating" })} />
+                          <FilterChip icon={ArrowDownAZ} label="По имени (А-Я)" active={filters.sortBy === "name"} onClick={() => setFilters({ ...filters, sortBy: "name" })} />
+                        </div>
+                      </div>
+                      {/* ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ: Новый раздел фильтрации по тегам ▼▼▼ */}
+                      <div className="md:col-span-2">
+                        <h4 className="text-sm uppercase tracking-wider mb-3 font-bold" style={{ color: "var(--text-muted)" }}>Категории</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {allCategories.map(cat => {
+                            const isIncluded = filters.includeCategories.includes(cat);
+                            const isExcluded = filters.excludeCategories.includes(cat);
+                            const status = isIncluded ? 'include' : isExcluded ? 'exclude' : 'off';
+                            return <TagFilterChip key={cat} tag={cat} status={status} onClick={() => handleCategoryClick(cat)} />;
+                          })}
+                        </div>
+                      </div>
+                      {/* ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲ */}
+                  </div>
                 </div>
-              </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </GlassPanel>
 
-              <div>
-                <div className="text-slate-300 text-xs uppercase tracking-wider mb-2">Возраст</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <FilterChip icon={InfinityIcon} label="Все" active={filters.ageGroup === "all"} onClick={() => setFilters({ ...filters, ageGroup: "all" })} />
-                  <FilterChip icon={CakeSlice} label="18+" active={filters.ageGroup === "18+"} onClick={() => setFilters({ ...filters, ageGroup: "18+" })} />
-                  <FilterChip icon={Clock} label="45+" active={filters.ageGroup === "45+"} onClick={() => setFilters({ ...filters, ageGroup: "45+" })} />
-                  <FilterChip icon={InfinityIcon} label="Бессмертные" active={filters.ageGroup === "immortal"} onClick={() => setFilters({ ...filters, ageGroup: "immortal" })} />
-                </div>
-              </div>
-
-              <div>
-                <div className="text-slate-300 text-xs uppercase tracking-wider mb-2">Сортировка</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <FilterChip icon={Star} label="Рейтинг" active={filters.sortBy === "rating"} onClick={() => setFilters({ ...filters, sortBy: "rating" })} />
-                  <FilterChip icon={Clock} label="Сначала новые" active={filters.sortBy === "newest"} onClick={() => setFilters({ ...filters, sortBy: "newest" })} />
-                  <FilterChip icon={ArrowDownAZ} label="По имени" active={filters.sortBy === "name"} onClick={() => setFilters({ ...filters, sortBy: "name" })} />
-                </div>
-              </div>
-            </div>
-          </MattePanel>
-        ) : null}
-
-        {/* Карточки — 1 / 2 / 3; маленькие боковые отступы */}
         {charactersLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
-            {Array.from({ length: 9 }).map((_, i) => (
-              <CharacterCardSkeleton key={i} />
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            {Array.from({ length: 12 }).map((_, i) => <CharacterCardSkeleton key={i} />)}
           </div>
-        ) : resultCount > 0 ? (
-          <AnimatePresence mode="popLayout">
-            <motion.div
-              layout
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5"
-            >
-              {view.map((c) => (
-                <motion.div
-                  key={c.id}
-                  layout
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.98 }}
-                  transition={{ duration: 0.2 }}
-                >
+        ) : finalFilteredCharacters.length > 0 ? (
+          <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <AnimatePresence>
+              {finalFilteredCharacters.map((c, i) => (
+                <motion.div key={c.id} layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}>
                   <CharacterCard character={c} onClick={() => navigate(`/characters/${c.id}`)} />
                 </motion.div>
               ))}
-            </motion.div>
-          </AnimatePresence>
+            </AnimatePresence>
+          </motion.div>
         ) : (
-          <MattePanel className="text-center py-14">
-            <div className="flex flex-col items-center justify-center">
-              <Frown className="h-10 w-10 text-slate-400 mb-3" />
-              <h3 className="text-white text-lg font-medium mb-1">Ничего не найдено</h3>
-              <p className="text-slate-400 mb-6">Попробуйте изменить критерии поиска.</p>
-              <button
-                onClick={resetFilters}
-                className="px-5 h-11 rounded-2xl font-medium"
-                style={{ color: "#111", background: TOKENS.accent, border: `1px solid ${TOKENS.border}` }}
-              >
-                Сбросить фильтры
-              </button>
-            </div>
-          </MattePanel>
+          <GlassPanel className="text-center py-16" style={{ background: "var(--glass)", border: "1px solid var(--border)", boxShadow: "0 8px 32px rgba(0, 0, 0, 0.35)", backdropFilter: "blur(16px)"}}>
+            <motion.div {...ANIM.float} className="w-16 h-16 mx-auto mb-6" style={{ color: "var(--text-muted)" }}>
+              <Frown size={40} />
+            </motion.div>
+            <h3 className="text-xl sm:text-2xl font-bold mb-2" style={{ background: "linear-gradient(120deg, #ffffff 0%, #d7aefb 50%, #ff6bd6 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", color: "transparent", fontFamily: "var(--font-family-heading)"}}>
+              Ничего не найдено
+            </h3>
+            <p className="mb-6 text-sm sm:text-base" style={{ color: "var(--text-muted)" }}>
+              Попробуйте изменить критерии поиска или сбросить фильтры.
+            </p>
+            <motion.button {...ANIM.buttonTap} onClick={resetFilters} className="inline-flex items-center gap-2 px-6 py-3.5 rounded-full font-bold text-sm" style={{ background: "linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))", color: "#ffffff", border: "none", boxShadow: "0 6px 20px rgba(255, 107, 214, 0.3)"}}>
+              <RotateCcw size={16} /> Сбросить все фильтры
+            </motion.button>
+          </GlassPanel>
         )}
       </div>
     </div>
-  );
+  ); 
 }
 
 export default CharactersPage;

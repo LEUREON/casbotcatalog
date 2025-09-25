@@ -41,7 +41,7 @@ export default function AvatarCropper({ src, size = 512, quality = 0.9, onCroppe
   }, [src, size, quality, onCropped]);
 
   return (
-    <div className={["rounded-full overflow-hidden border border-white/10", className].join(" ")} style={{ width: 56, height: 56 }}>
+    <div className={["rounded-full overflow-hidden border border-white/10", className].join(" ")}>
       {src ? <img src={src} alt="preview" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-white/5" />}
       <canvas ref={canvasRef} className="hidden" />
     </div>

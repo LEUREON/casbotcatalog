@@ -1,87 +1,78 @@
 // project/src/components/Shop/ShopItemCard.tsx
-
 import React from 'react';
 import { ShoppingCart } from 'lucide-react';
 import { ShopItem } from '../../types';
+import { motion } from 'framer-motion';
 
-const TOKENS = {
-  border: "rgba(255,255,255,0.16)",
-  itemBg: "rgba(255,255,255,0.08)",
-  itemBgActive: "rgba(255,255,255,0.12)",
-  accent: "#f7cfe1",
-};
-
-// Тип для наших кнопок из JSON
 type ActionButton = {
   label: string;
   url: string;
 };
 
 export function ShopItemCard({ item }: { item: ShopItem }) {
-  
-  // Проверяем, являются ли actionButtons массивом
   const actionButtons: ActionButton[] = Array.isArray(item.actionButtons) ? item.actionButtons : [];
 
   return (
     <div 
-      className="rounded-3xl overflow-hidden border h-full flex flex-col transition-shadow duration-300 hover:shadow-2xl"
+      className="relative w-full h-full flex flex-col rounded-2xl overflow-hidden shadow-lg border border-white/10"
       style={{
-        backgroundColor: TOKENS.itemBg,
-        borderColor: TOKENS.border,
-        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.2)",
+        background: "var(--bg-glass)",
+        fontFamily: "var(--font-family-body)"
       }}
     >
-      <div className="relative w-full aspect-square bg-black/20">
+      {/* Этот контейнер обеспечивает квадратную пропорцию для изображения */}
+      <div className="relative w-full h-0" style={{ paddingTop: '100%' }}>
         <img
           src={item.image}
           alt={item.name}
-          className="w-full h-full object-cover"
+          className="absolute top-0 left-0 w-full h-full object-cover"
         />
       </div>
 
-      <div className="p-4 flex flex-col flex-grow">
+      <div className="p-4 flex flex-col flex-1">
         <div
           className="self-start mb-3 px-3 py-1 rounded-full text-xs font-semibold"
           style={{
-            background: TOKENS.itemBgActive,
-            color: '#fff',
-            border: `1px solid ${TOKENS.border}`,
+            background: 'var(--badge-tag)',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--border-color)',
           }}
         >
           {item.category}
         </div>
         
-        <h3 className="text-xl font-bold text-white mb-2 flex-grow">
+        <h3 className="text-xl font-bold text-text-primary mb-2">
           {item.name}
         </h3>
         
-        <p className="text-slate-400 text-sm mb-4 line-clamp-3">
+        <p className="text-text-secondary text-sm mb-4 line-clamp-3 flex-grow">
           {item.description}
         </p>
 
-        <div className="mt-auto pt-4 border-t" style={{ borderColor: TOKENS.border }}>
+        <div className="mt-auto pt-4 border-t border-white/10">
             <div className="flex items-center justify-between">
                 <p className="text-2xl font-bold text-white">
                     {item.price} ₽
                 </p>
 
-                {/* Оборачиваем в div (для flex-gap) и рендерим кнопки из массива JSON */}
+                {/* Здесь рендерятся кастомные кнопки */}
                 <div className="flex items-center gap-2">
                   {actionButtons.length > 0 && actionButtons.map((button) => (
-                    <a 
+                    <motion.a 
                       key={button.label}
                       href={button.url}
-                      target="_blank" // Открываем в новой вкладке
+                      target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center space-x-2 px-4 py-2 rounded-xl font-semibold transition-transform hover:scale-105 active:scale-95"
-                      style={{ background: TOKENS.accent, color: '#111' }}
+                      className="flex items-center justify-center space-x-2 px-4 py-2 rounded-full font-semibold text-sm"
+                      style={{ background: 'var(--accent-primary)', color: 'var(--bg-dark)' }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
                     >
                         <ShoppingCart className="h-4 w-4" />
                         <span>{button.label}</span>
-                    </a>
+                    </motion.a>
                   ))}
                 </div>
-
             </div>
         </div>
       </div>

@@ -3,7 +3,7 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { DataProvider } from './contexts/DataContext';
+import { DataProvider, useData } from './contexts/DataContext';
 import { UserCharactersProvider } from './contexts/UserCharactersContext';
 import { ReviewsProvider } from './contexts/ReviewsContext';
 import { Layout } from './components/Layout/Layout';
@@ -21,6 +21,8 @@ import { ScrollManager } from './components/Layout/ScrollManager';
 import { UserCharactersPage } from './pages/UserCharactersPage';
 import { SubmitCharacterPage } from './pages/SubmitCharacterPage';
 import { NotificationsPage } from './pages/NotificationsPage';
+import Preloader from './components/common/Preloader';
+import { AnimatePresence, motion } from 'framer-motion';
 
 // Защищенный роут для админа
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -38,32 +40,48 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 // Основной контент приложения с роутингом
 function AppContent() {
+  const { loading: dataLoading } = useData();
+  const { loading: authLoading } = useAuth();
+
+  const isLoading = dataLoading || authLoading;
+
   return (
     <>
-      <ScrollManager />
-      <Routes>
-        <Route path="/login" element={<LoginForm />} />
-        <Route path="/register" element={<RegisterForm />} />
+      <Preloader isLoading={isLoading} />
+      <AnimatePresence>
+        {!isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <ScrollManager />
+            <Routes>
+              <Route path="/login" element={<LoginForm />} />
+              <Route path="/register" element={<RegisterForm />} />
 
-        <Route path="/" element={<Layout />}>
-            <Route index element={<Navigate to="/characters" replace />} />
-            <Route path="characters" element={<CharactersPage />} />
-            <Route path="characters/:characterId" element={<CharacterPage />} />
-            <Route path="rating" element={<RatingPage />} />
-            <Route path="shop" element={<ShopPage />} />
-            <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
-            <Route path="support" element={<ProtectedRoute><SupportChatPage /></ProtectedRoute>} />
-            <Route path="notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+              <Route path="/" element={<Layout />}>
+                  <Route index element={<Navigate to="/characters" replace />} />
+                  <Route path="characters" element={<CharactersPage />} />
+                  <Route path="characters/:characterId" element={<CharacterPage />} />
+                  <Route path="rating" element={<RatingPage />} />
+                  <Route path="shop" element={<ShopPage />} />
+                  <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+                  <Route path="favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
+                  <Route path="support" element={<ProtectedRoute><SupportChatPage /></ProtectedRoute>} />
+                  <Route path="notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
 
-            <Route path="user-characters" element={<UserCharactersPage />} />
-            <Route path="submit-character" element={<ProtectedRoute><SubmitCharacterPage /></ProtectedRoute>} />
+                  <Route path="user-characters" element={<UserCharactersPage />} />
+                  <Route path="submit-character" element={<ProtectedRoute><SubmitCharacterPage /></ProtectedRoute>} />
 
-            <Route path="admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-        </Route>
-        
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+                  <Route path="admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+              </Route>
+              
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   );
 }
