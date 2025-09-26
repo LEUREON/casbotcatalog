@@ -1,42 +1,93 @@
 // src/lib/pocketbase.ts
-import PocketBase from 'pocketbase';
-import { User } from '../types';
+import PocketBase, { RecordModel } from 'pocketbase';
+import type { User } from '../types';
 
-// 1. Получаем URL из переменных окружения
+// 1) Init client
 const pocketbaseUrl = import.meta.env.VITE_POCKETBASE_URL;
-
 if (!pocketbaseUrl) {
   throw new Error('VITE_POCKETBASE_URL is not set in your .env file!');
 }
-
-// 2. Создаем и экспортируем клиент PocketBase
 export const pb = new PocketBase(pocketbaseUrl);
 
-// 3. Автоматически сохраняем сессию пользователя в cookie
-// Это позволяет пользователю оставаться в системе после перезагрузки страницы
-pb.authStore.loadFromCookie(document.cookie);
-pb.authStore.onChange(() => {
-    document.cookie = pb.authStore.exportToCookie({ httpOnly: false });
-});
+// 2) Robust persistence (localStorage) so auth survives reloads
+const STORAGE_KEY = 'cas_auth_v1';
 
-// 4. Вспомогательные функции для удобной работы с пользователем
-export const isUserLoggedIn = () => pb.authStore.isValid && !!pb.authStore.model;
+function persistAuth() {
+  try {
+    const token = pb.authStore.token;
+    const model = pb.authStore.model;
+    if (token && model) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, model }));
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  } catch {}
+}
 
-export const getCurrentUser = (): User | null => {
-  if (!isUserLoggedIn() || !pb.authStore.model) {
-    return null;
-  }
-  const model = pb.authStore.model;
-  // Преобразуем данные из PocketBase в наш тип User
+export function restoreAuth() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const { token, model } = JSON.parse(raw);
+    if (token && model) pb.authStore.save(token, model as any);
+  } catch {}
+}
+
+// restore immediately (before providers mount)
+restoreAuth();
+// keep in sync
+pb.authStore.onChange(() => persistAuth(), true);
+
+// 3) Helpers
+export const formatUser = (model: RecordModel | null): User | null => {
+  if (!model) return null;
   return {
     id: model.id,
-    username: model.username,
-    nickname: model.nickname,
-    email: model.email,
-    role: model.role as 'admin' | 'user',
-    avatar: model.avatar ? pb.getFileUrl(model, model.avatar) : undefined,
-    createdAt: new Date(model.created),
-    isBlocked: model.is_blocked || false,
-    favorites: model.favorites || []
+    username: (model as any).username,
+    nickname: (model as any).nickname,
+    email: (model as any).email,
+    role: (model as any).role as 'admin' | 'user',
+    avatar: (model as any).avatar ? pb.getFileUrl(model as any, (model as any).avatar) : undefined,
+    createdAt: new Date((model as any).created),
+    isBlocked: Boolean((model as any).is_blocked),
+    favorites: (model as any).favorites || [],
   };
 };
+
+// Refresh JWT a bit before expiry (so it doesn't "слетать")
+export async function ensureFreshAuth(): Promise<void> {
+  try {
+    if (!pb.authStore.model || !pb.authStore.token) return;
+    const token = pb.authStore.token;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const expMs = payload.exp * 1000;
+    const now = Date.now();
+    const left = expMs - now;
+    if (left < 60_000) {
+      await pb.collection('users').authRefresh();
+    }
+  } catch {
+    // ignore
+  }
+}
+
+// Live watch for block status; returns unsubscribe
+export async function subscribeUserBlock(onBlocked: () => void) {
+  const model = pb.authStore.model;
+  if (!model) return () => {};
+  const id = model.id;
+  let unsubbed = false;
+  try {
+    await pb.collection('users').subscribe(id, (e: any) => {
+      const rec = e.record as any;
+      if (rec?.is_blocked) onBlocked();
+    });
+  } catch {
+    // ignore
+  }
+  return async () => {
+    if (unsubbed) return;
+    unsubbed = true;
+    try { await pb.collection('users').unsubscribe(id); } catch {}
+  };
+}

@@ -1,16 +1,54 @@
 // src/components/common/Preloader.tsx
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ThemedBackground from './ThemedBackground';
 
-const Preloader: React.FC<{ isLoading: boolean }> = ({ isLoading }) => {
+const Preloader: React.FC<{ isLoading: boolean; minShowMs?: number; fadeOutMs?: number; enterDelayMs?: number }> = ({ isLoading, minShowMs = 800, fadeOutMs = 500, enterDelayMs = 0 }) => {
+
+  // Keep the preloader visible at least `minShowMs` to avoid flicker.
+  const [shouldRender, setShouldRender] = useState<boolean>(isLoading);
+  const shownAtRef = useRef<number | null>(null);
+  const showDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (showDelayRef.current) clearTimeout(showDelayRef.current);
+      if (hideDelayRef.current) clearTimeout(hideDelayRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isLoading) {
+      if (showDelayRef.current) clearTimeout(showDelayRef.current);
+      if (hideDelayRef.current) clearTimeout(hideDelayRef.current);
+      const show = () => {
+        shownAtRef.current = Date.now();
+        setShouldRender(true);
+      };
+      if (enterDelayMs > 0) {
+        showDelayRef.current = setTimeout(show, enterDelayMs);
+      } else {
+        show();
+      }
+    } else {
+      const started = shownAtRef.current ?? Date.now();
+      const elapsed = Date.now() - started;
+      const remain = Math.max(minShowMs - elapsed, 0);
+      if (hideDelayRef.current) clearTimeout(hideDelayRef.current);
+      hideDelayRef.current = setTimeout(() => {
+        setShouldRender(false);
+      }, remain);
+    }
+  }, [isLoading, minShowMs, enterDelayMs]);
+
   return (
     <AnimatePresence>
-      {isLoading && (
+      {shouldRender && (
         <motion.div
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: fadeOutMs / 1000 }}
           className="fixed inset-0 z-[1000] flex flex-col items-center justify-center"
         >
           <ThemedBackground intensity={1} animated />

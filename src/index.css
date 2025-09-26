@@ -110,3 +110,9 @@ body {
     --tw-prose-th-borders: var(--border-color);
     --tw-prose-td-borders: var(--border-color);
 }
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh; /* Фоллбэк для десктопа и старых браузеров */
+  min-height: calc(var(--vh, 1vh) * 100); /* Используем нашу переменную */
+}

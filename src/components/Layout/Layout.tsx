@@ -37,7 +37,7 @@ export function Layout() {
         ].join(" ")}
       >
         {/* Отступ снизу под мобильную док-панель */}
-        <div className="pb-28 lg:pb-8">
+        <div className="pb-8">
           <Outlet />
         </div>
       </main>

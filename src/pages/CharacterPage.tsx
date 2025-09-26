@@ -16,7 +16,7 @@ import { InfoBadge } from "../components/ui/InfoBadge";
 import { TagBadge } from "../components/ui/TagBadge";
 import { StarRating } from "../components/ui/StarRating";
 import {
-  IconArrowLeft, IconHeart, IconMessageSquare, IconExternalLink,
+  IconArrowLeft, IconHeart, IconMessageSquare,
   IconUser, IconCake, IconInfinity, IconLoader, IconChevronDown
 } from '../components/ui/icons';
 import { ANIM } from '../lib/animations';
@@ -34,6 +34,8 @@ export function CharacterPage() {
   const [isFavorited, setIsFavorited] = useState(false);
   const [showFavoritePulse, setShowFavoritePulse] = useState(false);
   const [visibleComments, setVisibleComments] = useState(15);
+  const [noticeOpen, setNoticeOpen] = useState(false);
+
   
   const { scrollY } = useScroll();
   const bgIntensity = useTransform(scrollY, [0, 500], [0.35, 0.1]);
@@ -206,6 +208,72 @@ export function CharacterPage() {
             )}
         </div>
 
+
+        {character.fullDescription && (<>
+{/* ВАЖНО К ПРОЧТЕНИЮ — разворачиваемый жёлтый блок */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25 }}
+          className="w-full max-w-4xl mx-auto"
+        >
+          <div
+            className="rounded-xl border px-4 py-3 sm:px-5 sm:py-4"
+            style={{
+              background: "rgba(250, 204, 21, 0.10)", // yellow-400/10
+              borderColor: "rgba(250, 204, 21, 0.45)", // yellow-400/45
+              boxShadow: "0 8px 24px rgba(250, 204, 21, 0.05)",
+              color: "rgb(253, 230, 138)" // text-yellow-200
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setNoticeOpen((v) => !v)}
+              aria-expanded={noticeOpen}
+              className="w-full flex items-center justify-between gap-3 text-left"
+            >
+              <div className="flex items-center gap-3">
+                {/* Треугольник с восклицательным знаком */}
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <circle cx="12" cy="17" r="1.2" fill="currentColor"/>
+                </svg>
+                <span className="font-bold tracking-wide text-sm sm:text-base uppercase">Важно к прочтению</span>
+              </div>
+              <span
+                className={"transition-transform duration-200 inline-flex" + (noticeOpen ? " rotate-180" : "")}
+                aria-hidden="true"
+              >
+                <IconChevronDown size={18} />
+              </span>
+            </button>
+
+            <AnimatePresence initial={false}>
+              {noticeOpen && (
+                <motion.div
+                  key="notice-content"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.25, ease: "easeInOut" }}
+                  className="overflow-hidden"
+                >
+                  <div className="pt-3 sm:pt-4 text-[15px] leading-relaxed prose prose-sm prose-invert max-w-none">
+                    <p>&nbsp;- Данный сайт содержит материалы для лиц старше 18 лет.</p>
+                    <p>&nbsp;- Все персонажи и описываемые события являются вымышленными.</p>
+                    <p>&nbsp;- Любое совпадение с реальными людьми или событиями, является случайностью.</p>
+                    <p>&nbsp;- В наших текстах может присутствовать нецензурная лексика, жестокие персонажи и употребление различных веществ.</p>
+                    <p>&nbsp;- Мы предупреждаем о наличии сцен, которые могут быть травмирующими или оскорбительными для некоторых читателей.</p>
+                    <p>&nbsp;- Контент несет исключительно развлекательный характер и не имеет цели кого-то задеть или оскорбить.</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+</>)}
+
         {character.fullDescription && (<GlassPanel delay={0.4}>
          
           <h2 className="text-2xl font-bold mb-5 flex items-center justify-center gap-2 text-text-primary" style={{ background: "linear-gradient(120deg, #ffffff 0%, #d7aefb 50%, #ff6bd6 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text", color: "transparent", fontFamily: "var(--font-family-heading)", textShadow: "0 4px 12px rgba(0,0,0,0.2)"}}>
@@ -234,12 +302,10 @@ export function CharacterPage() {
                     href={link.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex w-full items-center justify-center gap-2 rounded-xl p-4 font-medium bg-item hover:bg-glass-hover border transition-smooth"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl p-4 font-medium bg-item hover:bg-glass-hover border transition-smooth text-center"
                     whileHover={{ scale: 1.03 }}
                   >
-                    <span>{link.label}</span>
-                    <IconExternalLink />
-                  </motion.a>
+                    <span>{link.label}</span></motion.a>
                 )
               ))}
             </div>

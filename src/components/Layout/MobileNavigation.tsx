@@ -1,6 +1,7 @@
+import { createPortal } from "react-dom";
 // project/src/components/Layout/MobileNavigation.tsx
-import React, { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom"; 
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion"; 
 import {
   Compass, BarChart2, Heart, Users, Menu as MenuIcon, ShoppingBag, Bell,
@@ -230,7 +231,37 @@ function getUnreadCountFrom(auth: any): number {
 
 /* ========================================================================================= */
 export function MobileNavigation() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false)
+  // Measure dock height to anchor via top = (visual viewport height - dock height)
+  const dockRef = useRef<HTMLDivElement | null>(null);
+  const [dockH, setDockH] = useState<number>(72);
+  useEffect(() => {
+    const measure = () => {
+      const h = dockRef.current?.offsetHeight || 72;
+      setDockH(h);
+    };
+    measure();
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    vv?.addEventListener('resize', measure);
+    vv?.addEventListener('scroll', measure);
+    const obs = new ResizeObserver(measure);
+    if (dockRef.current) obs.observe(dockRef.current);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+      vv?.removeEventListener('resize', measure);
+      vv?.removeEventListener('scroll', measure);
+      obs.disconnect();
+    };
+  }, []);
+
+  const supportsDVH = typeof window !== 'undefined' && 'CSS' in window && (CSS as any).supports?.('height: 100dvh');
+  const bottomOffset = 19; // tweak this gap (px)
+  const topValue = supportsDVH
+    ? `calc(100dvh - ${dockH}px - ${bottomOffset}px)`
+    : `calc((var(--vh, 1vh) * 100) - ${dockH}px - ${bottomOffset}px)`;
 
   useEffect(() => {
     const html = document.documentElement;
@@ -280,11 +311,37 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
     [user, unread, openMenu]
   );
 
-  return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" aria-label="Нижняя навигация">
-      <div className="mx-auto max-w-[820px] px-3 pb-3 pt-2" style={{ pointerEvents: "auto" }}>
+  
+  // Measure dock height locally to anchor the dock to the bottom of visual viewport
+  const dockRef = useRef<HTMLDivElement | null>(null);
+  const [dockH, setDockH] = useState<number>(72);
+  useEffect(() => {
+    const measure = () => setDockH(dockRef.current?.offsetHeight || 72);
+    measure();
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', measure);
+    vv?.addEventListener('resize', measure);
+    vv?.addEventListener('scroll', measure);
+    const ro = new ResizeObserver(measure);
+    if (dockRef.current) ro.observe(dockRef.current);
+    return () => {
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('orientationchange', measure);
+      vv?.removeEventListener('resize', measure);
+      vv?.removeEventListener('scroll', measure);
+      ro.disconnect();
+    };
+  }, []);
+  const supportsDVH = typeof window !== 'undefined' && 'CSS' in window && (CSS as any).supports?.('height: 100dvh');
+  const bottomOffset = 19; // tweak this gap (px)
+  const topValue = supportsDVH
+    ? `calc(100dvh - ${dockH}px - ${bottomOffset}px)`
+    : `calc((var(--vh, 1vh) * 100) - ${dockH}px - ${bottomOffset}px)`;
+return typeof window !== "undefined" ? createPortal((<nav className="fixed left-0 right-0 z-40 lg:hidden" aria-label="Нижняя навигация" style={{ top: topValue, WebkitTransform: "translateZ(0)", willChange: "transform" }}>
+      <div className="mx-auto max-w-[820px] px-3 pt-2" style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))", pointerEvents: "auto" }} >
         <div
-          className="w-full rounded-2xl border backdrop-blur-xl"
+          ref={dockRef} className="w-full rounded-2xl border backdrop-blur-xl"
           style={{
             borderColor: DESIGN.colors.border,
             background: DESIGN.colors.background.glass,
@@ -362,8 +419,7 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
           </ul>
         </div>
       </div>
-    </nav>
-  );
+    </nav>), document.body) : null;
 }
 
 /* ===== Полноэкранное меню: АНИМИРОВАННОЕ, С ГРАДИЕНТАМИ И ТЕНЯМИ ===== */
@@ -413,7 +469,7 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
       items: [
         { icon: Compass, title: "Каталог", to: "/characters" },
         { icon: BarChart2, title: "Рейтинг", to: "/rating" },
-        { icon: ShoppingBag, title: "Магазин", to: "/shop" },
+        { icon: ShoppingBag, title: "Магазин", to: ensureAuth(user, "/shop") },
         { icon: Heart, title: "Избранное", to: ensureAuth(user, "/favorites") },
       ],
     },
@@ -424,7 +480,7 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
   ];
 
   return (
-    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Мобильное меню">
+    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Мобильное меню">
       <ThemedBackground intensity={bgIntensity} className="z-0" />
       <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }} />
 
@@ -432,7 +488,7 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
         initial={{ y: 24, opacity: 0.98 }} animate={{ y: 0, opacity: 1 }}
         className="absolute inset-x-0 bottom-0 top-0 overflow-y-auto overscroll-contain"
         transition={sheetTransition} exit={{ opacity: 0, transition: { duration: 0 } }}>
-        <div className="mx-auto max-w-[820px] px-4 pt-4 pb-[104px]">
+        <div className="mx-auto max-w-[820px] px-4 pt-4" style={{ paddingBottom: "calc(104px + env(safe-area-inset-bottom, 0px))" }}>
           {/* header — АНИМИРОВАННЫЙ ЗАГОЛОВОК */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">

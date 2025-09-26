@@ -22,7 +22,9 @@ import { UserCharactersPage } from './pages/UserCharactersPage';
 import { SubmitCharacterPage } from './pages/SubmitCharacterPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import Preloader from './components/common/Preloader';
+import VirtualKeyboardRoot from './components/common/VirtualKeyboardRoot';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useTrueViewportHeight } from './hooks/useTrueViewportHeight'; // <-- 1. ИМПОРТИРУЕМ ХУК
 
 // Защищенный роут для админа
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -42,6 +44,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AppContent() {
   const { loading: dataLoading } = useData();
   const { loading: authLoading } = useAuth();
+  
+  useTrueViewportHeight(); // <-- 2. ВЫЗЫВАЕМ ХУК
 
   const isLoading = dataLoading || authLoading;
 
@@ -90,7 +94,8 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <AuthProvider>
+      <VirtualKeyboardRoot>
+        <AuthProvider>
         <DataProvider>
           <UserCharactersProvider>
             <ReviewsProvider>
@@ -99,6 +104,7 @@ function App() {
           </UserCharactersProvider>
         </DataProvider>
       </AuthProvider>
+      </VirtualKeyboardRoot>
     </Router>
   );
 }

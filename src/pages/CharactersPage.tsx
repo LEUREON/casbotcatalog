@@ -12,6 +12,7 @@ import { GlassPanel } from "../components/ui/GlassPanel";
 import { SearchBar } from "../components/ui/SearchBar";
 import { FilterChip } from "../components/ui/FilterChip";
 import { ANIM } from "../lib/animations";
+import { createSearch } from "../utils/advancedSearch";
 
 import {
   Users, Mars, Venus, Cake, Clock, Star, Frown, RotateCcw,
@@ -56,6 +57,16 @@ export function CharactersPage() {
     setFilters(prev => ({ ...prev, search: debouncedSearch }));
   }, [debouncedSearch, setFilters]);
 
+
+  // Advanced fuzzy search (Fuse.js with synonyms + transliteration)
+  const [searchEngine, setSearchEngine] = useState<{ search: (q: string) => { id: string; score: number }[] } | null>(null);
+  useEffect(() => {
+    (async () => {
+      const engine = await createSearch(characters);
+      setSearchEngine(engine);
+    })();
+  }, [characters]);
+
   const allCategories = useMemo(() => {
     const categorySet = new Set<string>();
     characters.forEach(c => (c.category || []).forEach(cat => categorySet.add(cat)));
@@ -86,41 +97,59 @@ export function CharactersPage() {
   }, [setFilters]);
   // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
   
-  const finalFilteredCharacters = useMemo(() => {
-    return characters
+  
+const finalFilteredCharacters = useMemo(() => {
+    // 1) Prepare search context ONCE per memo
+    const term = (filters.search || "").trim();
+    let searchIdSet: Set<string> | null = null;
+    let scoreMap: Map<string, number> | null = null;
+
+    if (term && searchEngine) {
+      try {
+        const res = searchEngine.search(term).slice(0, 500);
+        searchIdSet = new Set(res.map(r => r.id));
+        scoreMap = new Map(res.map(r => [r.id, r.score]));
+      } catch {}
+    }
+
+    // 2) Filter
+    const filtered = characters
       .filter(char => {
-        const term = (filters.search || "").toLowerCase();
-        const searchMatch = !term ||
-          char.name.toLowerCase().includes(term) ||
-          (char.occupation || "").toLowerCase().includes(term) ||
-          (char.description || "").toLowerCase().includes(term) ||
-          (char.tags || []).some(t => t.toLowerCase().includes(term));
-        
+        const searchMatch = !term || (searchIdSet ? searchIdSet.has(char.id) : true);
+
         const genderMatch = filters.gender === 'all' || char.gender === filters.gender;
         const ageGroupMatch = filters.ageGroup === 'all' || char.ageGroup === filters.ageGroup;
-        
+
         const includeTagsMatch = filters.includeTags.length === 0 || 
-          filters.includeTags.every(tag => char.tags.includes(tag));
-          
+          filters.includeTags.every(tag => (char.tags || []).includes(tag));
+
         const excludeTagsMatch = filters.excludeTags.length === 0 || 
-          !filters.excludeTags.some(tag => char.tags.includes(tag));
+          !filters.excludeTags.some(tag => (char.tags || []).includes(tag));
 
         const includeCategoriesMatch = filters.includeCategories.length === 0 ||
-          filters.includeCategories.some(cat => (char.category || []).includes(cat));
+          filters.includeCategories.some(cat => (Array.isArray(char.category) ? char.category : [char.category]).filter(Boolean).includes(cat));
 
         const excludeCategoriesMatch = filters.excludeCategories.length === 0 ||
-          !filters.excludeCategories.some(cat => (char.category || []).includes(cat));
-          
+          !filters.excludeCategories.some(cat => (Array.isArray(char.category) ? char.category : [char.category]).filter(Boolean).includes(cat));
+
         return searchMatch && genderMatch && ageGroupMatch && includeTagsMatch && excludeTagsMatch && includeCategoriesMatch && excludeCategoriesMatch;
-      })
-      .sort((a, b) => {
-        if (filters.sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
-        if (filters.sortBy === "name") return a.name.localeCompare(b.name);
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [characters, filters]);
-  
-  const activeCount =
+
+    // 3) Sort (by fuzzy score first if searching, then by chosen sort)
+    filtered.sort((a, b) => {
+      if (term && scoreMap) {
+        const sa = scoreMap.get(a.id) ?? 1;
+        const sb = scoreMap.get(b.id) ?? 1;
+        if (sa !== sb) return sa - sb;
+      }
+      if (filters.sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
+      if (filters.sortBy === "name") return a.name.localeCompare(b.name);
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
+    return filtered;
+  }, [characters, filters, searchEngine]);
+const activeCount =
     (filters.gender !== "all" ? 1 : 0) +
     (filters.ageGroup !== "all" ? 1 : 0) +
     (filters.sortBy !== "newest" ? 1 : 0) +
@@ -256,4 +285,4 @@ export function CharactersPage() {
   ); 
 }
 
-export default CharactersPage;
+export default CharactersPage; 
