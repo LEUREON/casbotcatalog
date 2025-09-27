@@ -115,4 +115,36 @@ body {
   flex-direction: column;
   min-height: 100vh; /* Фоллбэк для десктопа и старых браузеров */
   min-height: calc(var(--vh, 1vh) * 100); /* Используем нашу переменную */
+} 
+
+select.bg-black\/\.15 option {
+  background-color: #1a1a2e; /* Темный фон для опций */
+  color: var(--text-primary);
+}
+
+
+/* === Viewport height fixes (mobile-safe) === */
+.min-h-app {
+  min-height: calc(var(--vh, 1vh) * 100);
+}
+@supports (height: 100dvh) {
+  .min-h-app { min-height: 100dvh; }
+}
+
+/* Make sure background fills under notches, and base sizing is sane */
+html, body {
+  height: 100%;
+  margin: 0;
+  background: #0a0a12;
+}
+
+/* Respect safe-areas on iOS */
+.safe-padded {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+
+@supports (height: 100dvh) {
+  #root { min-height: 100dvh; }
 }

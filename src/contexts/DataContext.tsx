@@ -43,6 +43,8 @@ interface DataContextType {
   addNewsletter: (data: FormData) => Promise<boolean>;
   updateNewsletter: (id: string, data: FormData) => Promise<boolean>;
   deleteNewsletter: (id: string) => Promise<boolean>;
+  allCategories: string[];
+  allTags: string[];
 }
 
 
@@ -56,6 +58,7 @@ const formatCharacter = (record: any): Character => ({
     category: record.category || [],
     dominantColor: record.dominantColor || '',
     links: Array.isArray(record.links) ? record.links : [],
+    isNew: record.isNew || false, // Убедимся, что isNew всегда boolean
 });
 const formatUser = (model: any): User => ({ id: model.id, username: model.username, nickname: model.nickname, email: model.email, role: model.role, avatar: model.avatar ? pb.getFileUrl(model, model.avatar) : undefined, createdAt: new Date(model.created), isBlocked: model.is_blocked || false, favorites: model.favorites || [] });
 const formatShopItem = (record: any): ShopItem => ({
@@ -88,6 +91,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [usersLoading, setUsersLoading] = useState(false);
   const [shopItemsLoading, setShopItemsLoading] = useState(false);
   
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  
   const [filters, setFilters] = useState<FilterState>({ 
     search: '', 
     gender: 'all', 
@@ -102,17 +108,58 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const { user, isAdmin, toggleFavorite } = useAuth();
   const initialLoadDone = useRef(false);
 
+  // ✅ НАЧАЛО: Добавлена логика "хука" для сайта
+  const checkAndResetNewBadges = useCallback(async (characterRecords: any[]) => {
+      if (!isAdmin) return; // Эту проверку делает только админ
+
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const charactersToUpdate: Promise<any>[] = [];
+
+      characterRecords.forEach((char) => {
+          if (char.isNew) {
+              const lastUpdated = new Date(char.updated);
+              if (lastUpdated < sevenDaysAgo) {
+                  console.log(`Снимаем флаг 'Новый' с персонажа: ${char.name}`);
+                  charactersToUpdate.push(
+                      pb.collection('characters').update(char.id, { 'isNew': false })
+                  );
+              }
+          }
+      });
+
+      if (charactersToUpdate.length > 0) {
+          await Promise.allSettled(charactersToUpdate);
+          // После обновления данных на сервере, перезагружаем список, чтобы видеть актуальное состояние
+          await loadCharacters(); 
+      }
+  }, [isAdmin]);
+  // ✅ КОНЕЦ
+
   const loadCharacters = useCallback(async () => {
     setCharactersLoading(true);
     try {
       const recs = await pb.collection('characters').getFullList({ sort: '-created', '$autoCancel': false });
+      
+      // ✅ Запускаем проверку бейджей перед отображением данных
+      await checkAndResetNewBadges(recs);
+
       setCharacters(recs.map(formatCharacter));
+      
+      const categoriesSet = new Set<string>();
+      const tagsSet = new Set<string>();
+      recs.forEach(char => {
+        (char.category || []).forEach((cat: string) => categoriesSet.add(cat));
+        (char.tags || []).forEach((tag: string) => tagsSet.add(tag));
+      });
+      setAllCategories(Array.from(categoriesSet).sort());
+      setAllTags(Array.from(tagsSet).sort());
+
     } catch (e) {
       console.error("Char loading failed:", e);
     } finally {
       setCharactersLoading(false);
     }
-  }, []);
+  }, [checkAndResetNewBadges]); // Добавляем зависимость
 
   const loadUsers = useCallback(async () => { setUsersLoading(true); try { const recs = await pb.collection('users').getFullList({sort: '-created', '$autoCancel': false}); setUsers(recs.map(formatUser)); } catch (e) { console.error("Failed to load users", e); } finally { setUsersLoading(false); } }, []);
   const loadShopItems = useCallback(async () => { setShopItemsLoading(true); try { const recs = await pb.collection('shop_items').getFullList({ sort: '-created', '$autoCancel': false }); setShopItems(recs.map(formatShopItem)); } catch (e) { console.error("Failed to load shop items", e); } finally { setShopItemsLoading(false); } }, []);
@@ -323,7 +370,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ: Обновлена логика фильтрации ▼▼▼
   const filteredCharacters = useMemo(() => {
     return characters
       .filter(char => {
@@ -356,10 +402,19 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
   }, [characters, filters]);
-  // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
   
   //@ts-ignore
-  const value: DataContextType = { loading, characters, users, shopItems, messages, notifications, newsletters, filters, setFilters, filteredCharacters, charactersLoading, usersLoading, shopItemsLoading, updateCharacter, addCharacter, deleteCharacter, loadCharacters, loadUsers, updateUser, loadShopItems, addShopItem, updateShopItem, deleteShopItem, loadMessages, addMessage, updateMessage, toggleFavorite, addNotification, markNotificationAsRead, loadNotifications, loadNewsletters, addNewsletter, updateNewsletter, deleteNewsletter };
+  const value: DataContextType = { 
+      loading, characters, users, shopItems, messages, notifications, newsletters, 
+      filters, setFilters, filteredCharacters, charactersLoading, usersLoading, 
+      shopItemsLoading, updateCharacter, addCharacter, deleteCharacter, loadCharacters, 
+      loadUsers, updateUser, loadShopItems, addShopItem, updateShopItem, deleteShopItem, 
+      loadMessages, addMessage, updateMessage, toggleFavorite, addNotification, 
+      markNotificationAsRead, loadNotifications, loadNewsletters, addNewsletter, 
+      updateNewsletter, deleteNewsletter,
+      allCategories, 
+      allTags 
+  };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

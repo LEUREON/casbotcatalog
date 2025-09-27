@@ -10,7 +10,7 @@ import { useEffect } from 'react';
  *  --app-vvb : extra bottom offset (px) caused by shrinking visual viewport,
  *              so you can anchor fixed bars with: bottom: calc(env(safe-area-inset-bottom,0px) + var(--app-vvb, 0px));
  */
-const setViewportVars = () => {
+const setViewportVars = () => { 
   const vv = window.visualViewport;
   const vh = (vv?.height ?? window.innerHeight) * 0.01;
   (document.documentElement as HTMLElement).style.setProperty('--vh', `${vh}px`);

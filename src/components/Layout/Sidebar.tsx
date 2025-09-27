@@ -1,52 +1,49 @@
+// project/src/components/Layout/Sidebar.tsx
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  Compass, BarChart2, Heart, Users, ShoppingBag, Bell, LifeBuoy, Bot, Plus,
-  Settings, LogOut, LogIn, ChevronRight, Cat
+  Compass, BarChart2, Heart, ShoppingBag, Settings, Bell, Bot, Cat, LogIn, ChevronRight, Send
 } from "lucide-react";
-import IconBase from "../ui/IconBase"; 
-import ThemedBackground from "../common/ThemedBackground";
+import IconBase from "../ui/IconBase";
 import { useAuth } from "../../contexts/AuthContext";
 import { useUnreadTotal } from "../../hooks/useUnreadTotal";
 
 type SidebarProps = {
   isCollapsed?: boolean;
   setCollapsed?: (v: boolean) => void;
-}; 
-
-const TOKENS = {
-  border: "rgba(255,255,255,0.16)",
-  itemBg: "rgba(255,255,255,0.03)",
-  itemBgActive: "rgba(255,255,255,0.07)",
-  accent: "#f7cfe1",
-  accentRgb: "247, 207, 225",
-  badgeMax: 99,
 };
 
-
+// === DESIGN (синхронизировано со стилем MobileNavigation) ===
 const DESIGN = {
   colors: {
-    border: "rgba(255, 255, 255, 0.08)",
+    text: { primary: "#ffffff", secondary: "#e0e0e0", muted: "#b0b0b0" },
     background: {
       glass: "rgba(40, 40, 50, 0.65)",
       glassHover: "rgba(50, 50, 65, 0.8)",
+      floating: "rgba(30, 30, 40, 0.8)",
+      dark: "#121218",
       item: "rgba(255,255,255,0.04)",
+      reply: "rgba(35, 25, 55, 0.7)",
     },
-    accent: {
-      primary: "#d7aefb",
-      secondary: "#ff6bd6",
-    },
+    border: "rgba(255, 255, 255, 0.08)",
+    accent: { primary: "#d7aefb", secondary: "#ff6bd6" },
   },
+  fonts: { heading: 'var(--font-heading, inherit)' },
   shadows: {
     glass: "0 8px 32px rgba(0, 0, 0, 0.35)",
     button: "0 6px 20px rgba(255, 107, 214, 0.3)",
-    buttonHover: "0 8px 24px rgba(255, 107, 214, 0.4)",
-    accent: "0 4px 16px rgba(215, 174, 251, 0.4)",
   },
-};
+} as const;
 
-
+const ANIM = {
+  buttonTap: { whileTap: { scale: 0.97 } },
+  float: {
+    initial: { y: 0 },
+    animate: { y: [0, -3, 0] },
+    transition: { repeat: Infinity, duration: 2.4, ease: "easeInOut" }
+  }
+} as const;
 
 const ensureAuth = (user: any, to: string) =>
   !user ? `/login?next=${encodeURIComponent(to)}` : to;
@@ -54,307 +51,363 @@ const ensureAuth = (user: any, to: string) =>
 const isAdmin = (user: any) =>
   !!user && (user.isAdmin || user?.role === "admin" || user?.is_staff);
 
-const BADGE_LIMIT = TOKENS.badgeMax;
+type Item = { to: string; title: string; Icon: React.ElementType; badge?: number };
+
+function useItems(user: any, unread: number): Item[] {
+  return [
+    { Icon: Compass,     title: "Каталог",     to: "/characters" },
+    { Icon: BarChart2,   title: "Рейтинг",     to: "/rating" },
+    { Icon: ShoppingBag, title: "Магазин",     to: ensureAuth(user, "/shop") },
+    { Icon: Heart,       title: "Избранное",   to: ensureAuth(user, "/favorites") },
+  ];
+}
+
+function Row({
+  Icon, title, to, active, collapsed, badge,
+}: { Icon: React.ElementType; title: string; to: string; active: boolean; collapsed: boolean; badge?: number }) {
+  const showBadge = typeof badge === "number" && badge > 0;
+
+  return (
+    <Link
+      to={to}
+      className={[
+        "group relative overflow-hidden rounded-2xl border flex items-center",
+        collapsed ? "justify-center gap-0 px-2 py-2" : "gap-3 px-3 py-2",
+        "transition-all duration-300",
+      ].join(" ")}
+      style={{
+        borderColor: DESIGN.colors.border,
+        background: active
+          ? `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`
+          : DESIGN.colors.background.glass,
+        color: active ? "#ffffff" : DESIGN.colors.text.primary,
+        boxShadow: active ? DESIGN.shadows.button : DESIGN.shadows.glass,
+      }}
+      aria-current={active ? "page" : undefined}
+      title={collapsed ? title : undefined}
+    >
+      <div
+        className="inline-flex items-center justify-center shrink-0 rounded-full"
+        style={{
+          width: 44, height: 44,
+          background: active ? "rgba(255, 255, 255, 0.2)" : DESIGN.colors.background.glass,
+        }}
+      >
+        <IconBase icon={Icon as any} size="row" style={{ color: "#ffffff" }} />
+      </div>
+
+      {!collapsed && (
+        <div className="min-w-0 flex-1">
+          <p className="font-medium">{title}</p>
+        </div>
+      )}
+
+      {showBadge && (
+        <span
+          className="absolute -top-1 -right-1 rounded-full px-2 py-0.5 text-[11px] font-bold leading-none"
+          style={{
+            background: DESIGN.colors.accent.primary,
+            color: "#0a0a12",
+            border: `1px solid ${DESIGN.colors.border}`,
+          }}
+        >
+          {badge! > 99 ? "99+" : badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
+function UserCard({
+  user, unread, collapsed, onSettings, onNotifications,
+}: {
+  user: any; unread: number; collapsed: boolean;
+  onSettings: () => void; onNotifications: () => void;
+}) {
+  if (!user) {
+    return (
+      <div
+        className="rounded-2xl border p-5 mb-4"
+        style={{
+          borderColor: DESIGN.colors.border,
+          background: DESIGN.colors.background.glass,
+          boxShadow: DESIGN.shadows.glass,
+        }}
+      >
+        <div className="flex flex-col items-center text-center">
+          <div
+            className="rounded-full inline-flex items-center justify-center"
+            style={{
+              width: 56, height: 56,
+              background: DESIGN.colors.background.glass,
+              border: `1px solid ${DESIGN.colors.border}`,
+              boxShadow: DESIGN.shadows.glass,
+            }}
+          >
+            <IconBase icon={LogIn} size="row" />
+          </div>
+
+        {!collapsed && (
+          <>
+            <p className="mt-3 font-bold text-lg" style={{ color: DESIGN.colors.text.primary }}>
+              Войдите
+            </p>
+            <p className="mt-1 text-sm" style={{ color: DESIGN.colors.text.muted }}>
+              Чтобы сохранять избранное
+            </p>
+            <Link
+              to="/login"
+              className="mt-4 rounded-full px-5 py-2 inline-flex items-center gap-2 font-bold justify-center"
+              style={{
+                background: `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`,
+                color: "#0a0a12",
+                border: "none",
+                boxShadow: DESIGN.shadows.button,
+              }}
+            >
+              Войти
+            </Link>
+          </>
+        )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-2xl border p-5 mb-4"
+      style={{
+        borderColor: DESIGN.colors.border,
+        background: DESIGN.colors.background.glass,
+        boxShadow: DESIGN.shadows.glass,
+      }}
+    >
+      {/* Верхняя строка: аватар + имя/логин */}
+      <div className="flex items-center gap-4">
+        {(user.avatarUrl || user.avatar || user.photoURL) ? (
+          <img
+            src={(user.avatarUrl || user.avatar || user.photoURL) as string}
+            alt="Аватар"
+            className="w-14 h-14 rounded-full object-cover"
+            style={{ border: `1px solid ${DESIGN.colors.border}` }}
+          />
+        ) : (
+          <div
+            className="w-14 h-14 rounded-full inline-flex items-center justify-center"
+            style={{
+              background: `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`,
+              boxShadow: DESIGN.shadows.button,
+            }}
+          >
+            <IconBase icon={Cat} size="avatar" style={{ color: "#ffffff" }} />
+          </div>
+        )}
+
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <p className="font-bold text-lg truncate" style={{ color: DESIGN.colors.text.primary }}>
+              {user?.nickname || user?.login}
+            </p>
+            {user?.login && (
+              <p className="text-sm truncate" style={{ color: DESIGN.colors.text.muted }}>
+                {user?.login}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Нижняя строка: кнопки на той же подложке */}
+      {!collapsed && (
+        <div className="mt-4 flex justify-center gap-3">
+          <button
+            type="button"
+            aria-label="Настройки профиля"
+            className="h-12 w-12 rounded-full inline-flex items-center justify-center"
+            style={{
+              background: DESIGN.colors.background.glass,
+              color: DESIGN.colors.text.primary,
+              border: `1px solid ${DESIGN.colors.border}`,
+              boxShadow: DESIGN.shadows.glass,
+            }}
+            onClick={onSettings}
+          >
+            <IconBase icon={Settings} size="row" />
+          </button>
+
+          
+          <button
+            type="button"
+            aria-label="Уведомления"
+            className="relative h-12 w-12 rounded-full inline-flex items-center justify-center"
+            style={{
+              background: DESIGN.colors.background.glass,
+              color: DESIGN.colors.text.primary,
+              border: `1px solid ${DESIGN.colors.border}`,
+              boxShadow: DESIGN.shadows.glass,
+            }}
+            onClick={onNotifications}
+          >
+            <IconBase icon={Bell} size="row" />
+            {unread > 0 && (
+              <span
+                className="absolute -top-1 -right-1 min-w-[20px] h-[20px] rounded-full text-[11px] leading-[20px] font-bold inline-flex items-center justify-center"
+                style={{
+                  background: DESIGN.colors.accent.primary,
+                  color: "#0a0a12",
+                  border: `1px solid ${DESIGN.colors.border}`,
+                }}
+              >
+                {unread > 99 ? "99+" : unread}
+              </span>
+            )}
+          </button>
+
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function Sidebar({ isCollapsed = false }: SidebarProps) {
-  const navigate = useNavigate();
   const location = useLocation();
-  const auth = (useAuth() as any) || {};
-  const user = auth?.user;
-  const unread = useUnreadTotal?.() ?? 0;
+  const navigate = useNavigate();
+  const { user } = (useAuth() as any) || {};
+  const unreadTotal = useUnreadTotal();
 
-  const groups = React.useMemo(() => {
-    type Item = { icon: React.ElementType; title: string; to?: string; onClick?: () => void; badge?: number };
-    const g: { title: string; items: Item[] }[] = [
-      {
-        title: "Разделы",
-        items: [
-          { icon: Compass,   title: "Каталог",     to: "/characters" }, 
-          { icon: BarChart2, title: "Рейтинг",     to: "/rating" },
-          { icon: ShoppingBag, title: "Магазин", to: "/shop" },
-          { icon: Heart,     title: "Избранное",   to: ensureAuth(user, "/favorites") },
-        ],
-      },
-      
-    ];
-
-    if (isAdmin(user)) {
-      g.push({
-        title: "Управление",
-        items: [{ icon: Settings, title: "Админ-панель", to: "/admin" }],
-      });
-    }
-
-    return g;
-  }, [user]);
-
-  const isActive = (to?: string) =>
-    !!to && (location.pathname === to || location.pathname.startsWith(to + "/"));
-
-  const handleLogout = async () => {
-    try {
-      if (typeof auth.logout === "function") {
-        await Promise.resolve(auth.logout());
-      } else if (typeof auth.signOut === "function") {
-        await Promise.resolve(auth.signOut());
-      } else {
-        try { localStorage.removeItem("token"); } catch {}
-        window.location.reload();
-        return;
-      }
-    } catch {}
-  };
+  const items = useItems(user, unreadTotal);
 
   return (
     <aside
       className={[
-        "hidden lg:flex lg:fixed lg:inset-y-0 lg:z-40",
-        isCollapsed ? "lg:w-24" : "lg:w-72",
+        "hidden lg:flex fixed left-0 top-0 z-20 h-full",
+        isCollapsed ? "w-24" : "w-72",
       ].join(" ")}
       aria-label="Sidebar"
+      style={{ pointerEvents: "none" }}
     >
-      <div className="relative h-full w-full border-r border-white/10 bg-black/40 backdrop-blur-xl">
-        <ThemedBackground intensity={0.95} animated />
-
-        {/* каркас: сверху контент со скроллом, снизу фиксированный профиль */}
-        <div className="relative h-full flex flex-col">
-          {/* SCROLL AREA */}
-          <div className="flex-1 overflow-y-auto p-4" style={{ background: "linear-gradient(180deg, rgba(20,20,24,0.40), rgba(20,20,24,0.40))" }}> 
-            {/* Header */}
-            <div className="mb-4 flex items-center gap-2">
-              <span
-                className="rounded-xl px-2.5 py-1 text-[11px] uppercase tracking-widest leading-none inline-flex items-center justify-center"
-                style={{ background: "rgba(255,255,255,0.08)", border: `1px solid ${TOKENS.border}` }}
-              >
-              BETA
-              </span>
-              <h1 className="font-display text-xl font-semibold text-white">CAS Каталог</h1>
+      <div className="flex h-full w-full p-3" style={{ pointerEvents: "auto" }}>
+        <div
+          className="flex flex-col w-full rounded-2xl border backdrop-blur-xl"
+          style={{
+            borderColor: DESIGN.colors.border,
+            background: DESIGN.colors.background.glass,
+            boxShadow: DESIGN.shadows.glass,
+          }}
+        >
+          {/* header — АНИМИРОВАННЫЙ ЗАГОЛОВОК */}
+          <div className="px-3 pt-3 pb-1">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-3">
+                <motion.div
+                  {...ANIM.float}
+                  className="rounded-full w-12 h-12 flex items-center justify-center"
+                  style={{
+                    background: `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})`,
+                    boxShadow: DESIGN.shadows.button,
+                  }}
+                >
+                  <IconBase icon={Heart} size="row" style={{ color: "#ffffff" }} />
+                </motion.div>
+                <h1
+                  className="text-2xl font-black"
+                  style={{
+                    background: "linear-gradient(120deg, #ffffff 0%, #d7aefb 50%, #ff6bd6 100%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                    color: "transparent",
+                    fontFamily: DESIGN.fonts.heading,
+                  }}
+                >
+                  CAS Каталог
+                </h1>
+              </div>
             </div>
-
-            {/* Секции */}
-            {groups.map((g) => (
-              <section key={g.title} className="mb-5">
-                <h3 className="px-1 mb-2 text-[12px] tracking-wider uppercase opacity-70">
-                  {g.title}
-                </h3>
-                <div className="flex flex-col gap-2">
-                  {g.items.map(({icon, title, to, onClick, badge}) => (
-                    <Row
-                      key={title}
-                      Icon={icon}
-                      title={title}
-                      to={to}
-                      onClick={onClick}
-                      active={isActive(to)}
-                      badge={typeof badge === "number" && badge > 0 ? (badge > BADGE_LIMIT ? `${BADGE_LIMIT}+` : String(badge)) : undefined}
-                    />
-                  ))}
-                </div>
-              </section>
-            ))}
           </div>
 
-          {/* FIXED FOOTER: USER BLOCK */}
-          <div className="sticky bottom-0 z-[1] p-4 border-t border-white/10 bg-black/40 backdrop-blur-xl">
-            {user ? (
-              <ProfileFooter
-                user={user}
-                unread={unread}
-                onOpenSettings={() => navigate(ensureAuth(user, "/profile"))}
-                onOpenNotifications={() => navigate(ensureAuth(user, "/notifications"))}
-                onLogout={handleLogout}
-              />
-            ) : (
-              <LoginFooter onLogin={() => navigate("/login")} />
+          {/* Блок пользователя */}
+          <div className="px-3">
+            <UserCard
+              user={user}
+              unread={unreadTotal}
+              collapsed={!!isCollapsed}
+              onSettings={() => navigate(ensureAuth(user, "/profile"))}
+              onNotifications={() => navigate(ensureAuth(user, "/notifications"))}
+            />
+          </div>
+
+          {/* Навигация */}
+          <nav className="flex-1 px-3 py-2 space-y-2">
+            {items.map(({ to, title, Icon, badge }) => {
+              const active = location.pathname === to || location.pathname.startsWith(to);
+              return (
+                <Row
+                  key={title}
+                  Icon={Icon}
+                  title={title}
+                  to={to}
+                  active={!!active}
+                  collapsed={!!isCollapsed}
+                  badge={badge}
+                />
+              );
+            })}
+
+            {/* Админ-панель */}
+            {isAdmin(user) && (
+              <div className="pt-2">
+                {!isCollapsed && (
+                  <p className="px-2 pb-2 text-xs uppercase tracking-wide" style={{ color: DESIGN.colors.text.muted }}>
+                    Управление
+                  </p>
+                )}
+                <Row
+                  Icon={Settings}
+                  title="Админ-панель"
+                  to="/admin"
+                  active={location.pathname.startsWith("/admin")}
+                  collapsed={!!isCollapsed}
+                />
+              </div>
             )}
-          </div>
+          </nav>
+
+          {/* Telegram — строка такого же размера, как пункты меню */}
+          {!isCollapsed && (
+            <div className="px-3 pb-3">
+              <a
+                href="https://t.me/cascharacter"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative overflow-hidden rounded-2xl border flex items-center gap-3 px-3 py-2"
+                style={{
+                  borderColor: DESIGN.colors.border,
+                  background: `linear-gradient(135deg, #4facfe, #00f2fe)`,
+                  color: "#ffffff",
+                  boxShadow: "0 6px 20px rgba(79, 172, 254, 0.3)",
+                }}
+              >
+                <div
+                  className="inline-flex items-center justify-center shrink-0 rounded-full"
+                  style={{ width: 44, height: 44, background: "rgba(255, 255, 255, 0.2)" }}
+                >
+                  <IconBase icon={Send} size="row" style={{ color: "#ffffff" }} />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold">Telegram Канал</p>
+                </div>
+
+                <IconBase icon={ChevronRight} size="row" />
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </aside>
   );
 }
 
-/* ───────────────── components ───────────────── */
-
-function Row({ Icon, title, to, onClick, active, badge }: {
-  Icon: React.ElementType;
-  title: string;
-  to?: string;
-  onClick?: () => void;
-  active?: boolean;
-  badge?: string;
-}) {
-  const Wrap: any = to ? Link : "button";
-  const wrapProps: any = to ? { to } : { type: "button", onClick };
-
-  return (
-    <Wrap
-      {...wrapProps}
-      className="relative overflow-hidden rounded-2xl border flex items-center gap-3 px-3 py-2"
-      style={{
-        borderColor: DESIGN.colors.border,
-        background: active ? `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})` : DESIGN.colors.background.glass,
-        color: active ? "#ffffff" : undefined,
-        boxShadow: active ? DESIGN.shadows.button : DESIGN.shadows.glass,
-      }}
-    >
-      <div
-        className="grid place-items-center rounded-full relative"
-        style={{
-          width: 44,
-          height: 44,
-          background: active ? `linear-gradient(135deg, ${DESIGN.colors.accent.primary}, ${DESIGN.colors.accent.secondary})` : "rgba(255,255,255,0.12)",
-          boxShadow: active ? DESIGN.shadows.button : "none",
-        }}
-      >
-        <IconBase icon={Icon}  style={active ? { color: "#ffffff" } : undefined} />
-<AnimatePresence>
-          {badge && (
-            <motion.span
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full text-[11px] leading-none font-bold inline-flex items-center justify-center leading-none"
-              style={{ background: TOKENS.accent, color: "#111", border: `1px solid ${TOKENS.border}` }}
-            >
-              {badge}
-            </motion.span>
-          )}
-        </AnimatePresence>
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <p className="font-display font-semibold whitespace-nowrap overflow-hidden text-ellipsis" style={{ fontSize: "clamp(13px,3.2vw,15px)", lineHeight: 1.2 }}>
-          {title}
-        </p>
-      </div>
-
-      {to && (
-        <span className="opacity-60 leading-none inline-flex items-center justify-center">
-          <IconBase icon={ChevronRight} />
-        </span>
-      )}
-    </Wrap>
-  );
-}
-
-/* ——— нижний фиксированный блок — ПОЛЬЗОВАТЕЛЬ ——— */
-
-function ProfileFooter({
-  user,
-  unread,
-  onOpenSettings,
-  onOpenNotifications,
-  onLogout,
-}: {
-  user: any;
-  unread: number;
-  onOpenSettings: () => void;
-  onOpenNotifications: () => void;
-  onLogout: () => void;
-}) {
-  const avatar = user?.avatarUrl || user?.avatar_url || user?.avatar || "";
-  const displayName = user?.nickname || user?.login || "Профиль";
-
-  return (
-    <div className="relative rounded-2xl border border-white/10 bg-white/[.03] p-4">
-      {/* верхняя панель действий — две компактные кнопки с подписью справа от иконки */}
-      <div className="flex items-center gap-2 mb-3">
-        {/* Настройки */}
-        <button
-          type="button"
-          aria-label="Настройки"
-          className="inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm"
-          style={{ borderColor: TOKENS.border, background: "transparent" }}
-          onClick={onOpenSettings}
-        >
-          <span
-            className="inline-flex items-center justify-center rounded-full border leading-none"
-            style={{ width: 28, height: 28, borderColor: TOKENS.border, background: "rgba(255,255,255,0.06)" }}
-          >
-            <IconBase icon={Settings} />
-          </span>
-         </button>
-
-        {/* Уведомления */}
-        <button
-          type="button"
-          aria-label="Уведомления"
-          className="relative inline-flex items-center gap-2 rounded-xl border px-2.5 py-1.5 text-sm"
-          style={{ borderColor: TOKENS.border, background: "transparent" }}
-          onClick={onOpenNotifications}
-        >
-          <span
-            className="inline-flex items-center justify-center rounded-full border relative leading-none"
-            style={{ width: 28, height: 28, borderColor: TOKENS.border, background: "rgba(255,255,255,0.06)" }}
-          >
-            <IconBase icon={Bell} />
-            {unread > 0 && (
-              <span
-                className="absolute -top-1.5 -right-1.5 rounded-full text-[10px] font-bold px-1.5 h-4 leading-none inline-flex items-center justify-center"
-                style={{ background: DESIGN.colors.accent.primary, color: "#0a0a12", border: `1px solid ${DESIGN.colors.border}`, boxShadow: DESIGN.shadows.accent }}
-              >
-                {unread > BADGE_LIMIT ? `${BADGE_LIMIT}+` : unread}
-              </span>
-            )}
-          </span>
-          <span className="text-white/90 leading-none inline-flex items-center justify-center">Уведомления</span>
-        </button>
-
-        {/* (опционально) выход можно оставить/скрыть при необходимости
-        <button
-          onClick={onLogout}
-          className="h-10 w-10 rounded-full bg-pink-300 text-black grid place-items-center hover:brightness-95 active:brightness-90"
-          title="Выйти"
-          type="button"
-        >
-          <IconBase icon={LogOut} />
-        </button>
-        */}
-      </div>
-
-      {/* данные пользователя — только ник/логин, без email */}
-      <div className="flex items-center gap-3">
-        {avatar ? (
-          <img
-            src={avatar}
-            alt={displayName}
-            className="w-12 h-12 rounded-full border border-white/15 object-cover"
-          />
-        ) : (
-          <div className="w-12 h-12 rounded-full bg-accent border-white/15 grid place-items-center text-black" style={{ background: TOKENS.accent }}>
-            <Cat className="text-black w-[22px] h-[22px]" />
-          </div>
-        )} 
-
-        <div className="min-w-0 flex-1">
-          <div className="font-semibold text-white truncate">{displayName}</div>
-          {/* email удалён по требованию */}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LoginFooter({ onLogin }: { onLogin: () => void }) {
-  return (
-    <div className="relative rounded-2xl border border-white/10 bg-white/[.03] p-4 flex items-center justify-center">
-      <button
-        onClick={onLogin}
-        className="shrink-0 rounded-2xl font-semibold hover:brightness-95 active:brightness-90 w-full px-6 h-12"
-        style={{ 
-          backgroundColor: '#f794dc',
-          color: 'var(--accent-contrast, #000000) !important',
-          border: 'none',
-          textShadow: 'none',
-          fontSize: '1rem',
-          lineHeight: '1.5rem',
-          fontWeight: 'bold'
-        }}
-      >
-        Войти
-      </button>
-    </div>
-  );
-}
- 
+export default Sidebar;
