@@ -74,21 +74,7 @@ export const CharacterCard = memo(function CharacterCard({
     return { avgRating: sum / list.length, reviewsCount: list.length };
   }, [reviews, id]);
 
-  const getCreatedAtMs = (value: unknown): number | null => {
-    if (!value) return null;
-    if (typeof value === 'number') return value;
-    if (typeof value === 'string') return Number.isNaN(Date.parse(value)) ? null : Date.parse(value);
-    if (value instanceof Date) return value.getTime();
-    // @ts-ignore
-    if (typeof value === 'object' && value?.toDate instanceof Function) return value.toDate().getTime();
-    // @ts-ignore
-    if (typeof value === 'object' && typeof value?.seconds === 'number') return value.seconds * 1000;
-    return null;
-  };
-
-  const createdAtMs = getCreatedAtMs(createdAt);
-  const isRecent = createdAtMs !== null && Date.now() - createdAtMs < 7 * 24 * 60 * 60 * 1000;
-  const showNewBadge = !!isNew || isRecent;
+  const showNewBadge = !!isNew;
 
   const isFavorited = user?.favorites?.includes(id) || false;
 
@@ -165,14 +151,15 @@ export const CharacterCard = memo(function CharacterCard({
         </div>
         {category?.length > 0 && (
           <div className="flex flex-wrap items-center justify-center gap-1.5 mb-3">
-            {category.slice(0, 3).map((cat) => (
+            {category.map((cat) => (
               <TagBadge key={cat} text={cat} isCategory />
             ))}
           </div>
         )}
         {tags?.length > 0 && (
           <div className="flex flex-wrap items-center justify-center gap-1.5 mb-3">
-            {tags.slice(0, 3).map((tag) => (
+            {/* ✅ ИЗМЕНЕНИЕ: убрано .slice(0, 3) */}
+            {tags.map((tag) => (
               <TagBadge key={tag} text={tag} />
             ))}
           </div>

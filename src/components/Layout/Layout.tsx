@@ -15,7 +15,7 @@ export function Layout() {
   return (
     <div
       className={[
-        "relative min-h-screen",
+        "relative min-h-app safe-padded",
         isCharacters ? "bg-transparent" : "bg-[#0e1116]",
       ].join(" ")}
     >

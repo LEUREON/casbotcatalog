@@ -1,7 +1,7 @@
 {
-  "name": "Character AI Space",
-  "short_name": "C.AI Space",
-  "description": "Discover and interact with AI characters.",
+  "name": "CAS Каталог",
+  "short_name": "CAS Каталог",
+  "description": "Каталог персонажей от CAS",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#121218",

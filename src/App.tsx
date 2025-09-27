@@ -82,7 +82,7 @@ function AppContent() {
               </Route>
               
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+            </Routes> 
           </motion.div>
         )}
       </AnimatePresence>

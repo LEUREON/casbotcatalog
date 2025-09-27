@@ -13,7 +13,7 @@ export function ShopItemCard({ item }: { item: ShopItem }) {
   const actionButtons: ActionButton[] = Array.isArray(item.actionButtons) ? item.actionButtons : [];
 
   return (
-    <div 
+    <div
       className="relative w-full h-full flex flex-col rounded-2xl overflow-hidden shadow-lg border border-white/10"
       style={{
         background: "var(--bg-glass)",
@@ -30,22 +30,26 @@ export function ShopItemCard({ item }: { item: ShopItem }) {
       </div>
 
       <div className="p-4 flex flex-col flex-1">
-        <div
-          className="self-start mb-3 px-3 py-1 rounded-full text-xs font-semibold"
-          style={{
-            background: 'var(--badge-tag)',
-            color: 'var(--text-secondary)',
-            border: '1px solid var(--border-color)',
-          }}
-        >
-          {item.category}
-        </div>
+        {/* Бейдж будет отображаться только если item.category существует */}
+        {item.category && (
+          <div
+            className="self-start mb-3 px-3 py-1 rounded-full text-xs font-semibold"
+            style={{
+              background: 'var(--badge-tag)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            {item.category}
+          </div>
+        )}
         
         <h3 className="text-xl font-bold text-text-primary mb-2">
           {item.name}
         </h3>
         
-        <p className="text-text-secondary text-sm mb-4 line-clamp-3 flex-grow">
+        {/* Удален класс line-clamp-3 для снятия ограничения по строкам */}
+        <p className="text-text-secondary text-sm mb-4 flex-grow">
           {item.description}
         </p>
 
