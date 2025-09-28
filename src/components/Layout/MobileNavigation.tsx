@@ -1,8 +1,8 @@
 import { createPortal } from "react-dom";
 // project/src/components/Layout/MobileNavigation.tsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom"; 
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion"; 
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import {
   Compass, BarChart2, Heart, Users, Menu as MenuIcon, ShoppingBag, Bell,
   LifeBuoy, Bot, Plus, Settings, LogIn, X, ChevronRight, LogOut, Cat,
@@ -232,36 +232,6 @@ function getUnreadCountFrom(auth: any): number {
 /* ========================================================================================= */
 export function MobileNavigation() {
   const [open, setOpen] = useState(false)
-  // Measure dock height to anchor via top = (visual viewport height - dock height)
-  const dockRef = useRef<HTMLDivElement | null>(null);
-  const [dockH, setDockH] = useState<number>(72);
-  useEffect(() => {
-    const measure = () => {
-      const h = dockRef.current?.offsetHeight || 72;
-      setDockH(h);
-    };
-    measure();
-    const vv = (window as any).visualViewport as VisualViewport | undefined;
-    window.addEventListener('resize', measure);
-    window.addEventListener('orientationchange', measure);
-    vv?.addEventListener('resize', measure);
-    vv?.addEventListener('scroll', measure);
-    const obs = new ResizeObserver(measure);
-    if (dockRef.current) obs.observe(dockRef.current);
-    return () => {
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('orientationchange', measure);
-      vv?.removeEventListener('resize', measure);
-      vv?.removeEventListener('scroll', measure);
-      obs.disconnect();
-    };
-  }, []);
-
-  const supportsDVH = typeof window !== 'undefined' && 'CSS' in window && (CSS as any).supports?.('height: 100dvh');
-  const bottomOffset = 19; // tweak this gap (px)
-  const topValue = supportsDVH
-    ? `calc(100dvh - ${dockH}px - ${bottomOffset}px)`
-    : `calc((var(--vh, 1vh) * 100) - ${dockH}px - ${bottomOffset}px)`;
 
   useEffect(() => {
     const html = document.documentElement;
@@ -298,7 +268,6 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  useReducedMotion();
 
   const items = useMemo(
     () => [
@@ -310,38 +279,20 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
     ],
     [user, unread, openMenu]
   );
-
   
-  // Measure dock height locally to anchor the dock to the bottom of visual viewport
-  const dockRef = useRef<HTMLDivElement | null>(null);
-  const [dockH, setDockH] = useState<number>(72);
-  useEffect(() => {
-    const measure = () => setDockH(dockRef.current?.offsetHeight || 72);
-    measure();
-    const vv = (window as any).visualViewport as VisualViewport | undefined;
-    window.addEventListener('resize', measure);
-    window.addEventListener('orientationchange', measure);
-    vv?.addEventListener('resize', measure);
-    vv?.addEventListener('scroll', measure);
-    const ro = new ResizeObserver(measure);
-    if (dockRef.current) ro.observe(dockRef.current);
-    return () => {
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('orientationchange', measure);
-      vv?.removeEventListener('resize', measure);
-      vv?.removeEventListener('scroll', measure);
-      ro.disconnect();
-    };
-  }, []);
-  const supportsDVH = typeof window !== 'undefined' && 'CSS' in window && (CSS as any).supports?.('height: 100dvh');
-  const bottomOffset = 19; // tweak this gap (px)
-  const topValue = supportsDVH
-    ? `calc(100dvh - ${dockH}px - ${bottomOffset}px)`
-    : `calc((var(--vh, 1vh) * 100) - ${dockH}px - ${bottomOffset}px)`;
-return typeof window !== "undefined" ? createPortal((<nav className="fixed left-0 right-0 z-40 lg:hidden" aria-label="Нижняя навигация" style={{ top: topValue, WebkitTransform: "translateZ(0)", willChange: "transform" }}>
-      <div className="mx-auto max-w-[820px] px-3 pt-2" style={{ paddingBottom: "calc(12px + env(safe-area-inset-bottom, 0px))", pointerEvents: "auto" }} >
+return typeof window !== "undefined" ? createPortal((
+    <nav 
+        className="fixed left-0 right-0 z-40 lg:hidden"
+        aria-label="Нижняя навигация" 
+        style={{ 
+            bottom: 'calc(12px + var(--app-vvb, 0px) + env(safe-area-inset-bottom, 0px))',
+            WebkitTransform: "translateZ(0)", 
+            willChange: "transform" 
+        }}
+    >
+      <div className="mx-auto max-w-[820px] px-3" style={{ pointerEvents: "auto" }} >
         <div
-          ref={dockRef} className="w-full rounded-2xl border backdrop-blur-xl"
+          className="w-full rounded-2xl border backdrop-blur-xl"
           style={{
             borderColor: DESIGN.colors.border,
             background: DESIGN.colors.background.glass,
@@ -426,16 +377,11 @@ return typeof window !== "undefined" ? createPortal((<nav className="fixed left-
 function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: number; unread: number }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const pulseEnabled = useMemo(() => location.pathname !== "/notifications" && unread > 0, [location.pathname, unread]);
   const auth = (useAuth() as any) || {};
   const user = auth?.user;
 
   const reduce = useReducedMotion();
   const sheetTransition = reduce ? { duration: 0 } : { type: "tween", ease: "easeOut", duration: 0.28 };
-
-  // Параллакс для фона
-  const { scrollY } = useScroll();
-  const bgIntensity = useTransform(scrollY, [0, 500], [0.3, 0.1]);
 
   const handleLogout = async () => {
     try {
@@ -481,8 +427,7 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Мобильное меню">
-      <ThemedBackground intensity={bgIntensity} className="z-0" />
-      <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }} />
+      <ThemedBackground />
 
       <motion.div
         initial={{ y: 24, opacity: 0.98 }} animate={{ y: 0, opacity: 1 }}

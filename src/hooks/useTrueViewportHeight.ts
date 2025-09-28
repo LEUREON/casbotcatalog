@@ -1,5 +1,5 @@
 // src/hooks/useTrueViewportHeight.ts
-import { useEffect } from 'react';
+import { useEffect } from 'react'; 
 
 /**
  * Sets CSS vars for reliable viewport height and bottom inset that reacts to
