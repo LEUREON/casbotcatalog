@@ -1,23 +1,22 @@
 // src/pages/CharactersPage.tsx
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence, useScroll, useTransform } from "framer-motion";
 import ThemedBackground from "../components/common/ThemedBackground";
 import { useData } from "../contexts/DataContext";
 import { CharacterCard } from "../components/Characters/CharacterCard";
 import { CharacterCardSkeleton } from "../components/Characters/CharacterCardSkeleton";
-import { useDebounce } from "../utils/useDebounce";
 
 import { GlassPanel } from "../components/ui/GlassPanel";
 import { SearchBar } from "../components/ui/SearchBar";
 import { FilterChip } from "../components/ui/FilterChip";
 import { ANIM } from "../lib/animations";
-import { createSearch } from "../utils/advancedSearch";
 
 import {
   Users, Mars, Venus, Cake, Clock, Star, Frown, RotateCcw,
-  ArrowDownAZ, Infinity as InfinityIcon, Check, X, Minus, Tag
+  ArrowDownAZ, Infinity as InfinityIcon
 } from "lucide-react";
+
 
 const TagFilterChip = ({ tag, status, onClick }: { tag: string, status: 'include' | 'exclude' | 'off', onClick: () => void }) => {
   const baseClasses = "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border transition-all duration-200 cursor-pointer";
@@ -38,43 +37,31 @@ const TagFilterChip = ({ tag, status, onClick }: { tag: string, status: 'include
 
 export function CharactersPage() {
   const navigate = useNavigate();
-  const { characters, filters, setFilters, charactersLoading } = useData();
+  // ▼▼▼ ИЗМЕНЕНИЕ №1: Получаем отфильтрованных персонажей напрямую из контекста ▼▼▼
+  const { 
+    filters, 
+    setFilters, 
+    charactersLoading, 
+    filteredCharacters, // Используем этот массив!
+    allCategories 
+  } = useData();
 
   const [searchLocal, setSearchLocal] = useState(filters.search ?? "");
   const [showFilters, setShowFilters] = useState(false);
-  const debouncedSearch = useDebounce(searchLocal, 300);
+  
+  // Обновляем поиск в контексте при изменении локального значения
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setFilters(prev => ({ ...prev, search: searchLocal }));
+    }, 300); // Debounce
+    return () => clearTimeout(handler);
+  }, [searchLocal, setFilters]);
+
 
   const { scrollY } = useScroll();
   const bgIntensity = useTransform(scrollY, [0, 500], [0.3, 0.1]);
 
-  useEffect(() => {
-    return () => {
-      setFilters(prev => ({ ...prev, search: "", gender: "all", ageGroup: "all", sortBy: "newest", includeTags: [], excludeTags: [], category: [] }));
-    };
-  }, [setFilters]);
-
-  useEffect(() => {
-    setFilters(prev => ({ ...prev, search: debouncedSearch }));
-  }, [debouncedSearch, setFilters]);
-
-
-  // Advanced fuzzy search (Fuse.js with synonyms + transliteration)
-  const [searchEngine, setSearchEngine] = useState<{ search: (q: string) => { id: string; score: number }[] } | null>(null);
-  useEffect(() => {
-    (async () => {
-      const engine = await createSearch(characters);
-      setSearchEngine(engine);
-    })();
-  }, [characters]);
-
-  const allCategories = useMemo(() => {
-    const categorySet = new Set<string>();
-    characters.forEach(c => (c.category || []).forEach(cat => categorySet.add(cat)));
-    return Array.from(categorySet).sort((a,b) => a.localeCompare(b));
-  }, [characters]);
-
-  // ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ: Логика клика по категории ▼▼▼
-  const handleCategoryClick = useCallback((cat: string) => {
+  const handleCategoryClick = (cat: string) => {
     setFilters(prev => {
       const isIncluded = prev.includeCategories.includes(cat);
       const isExcluded = prev.excludeCategories.includes(cat);
@@ -94,69 +81,16 @@ export function CharactersPage() {
         return { ...prev, excludeCategories: prev.excludeCategories.filter(c => c !== cat) };
       }
     });
-  }, [setFilters]);
-  // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
-  
-  
-const finalFilteredCharacters = useMemo(() => {
-    // 1) Prepare search context ONCE per memo
-    const term = (filters.search || "").trim();
-    let searchIdSet: Set<string> | null = null;
-    let scoreMap: Map<string, number> | null = null;
+  };
 
-    if (term && searchEngine) {
-      try {
-        const res = searchEngine.search(term).slice(0, 500);
-        searchIdSet = new Set(res.map(r => r.id));
-        scoreMap = new Map(res.map(r => [r.id, r.score]));
-      } catch {}
-    }
-
-    // 2) Filter
-    const filtered = characters
-      .filter(char => {
-        const searchMatch = !term || (searchIdSet ? searchIdSet.has(char.id) : true);
-
-        const genderMatch = filters.gender === 'all' || char.gender === filters.gender;
-        const ageGroupMatch = filters.ageGroup === 'all' || char.ageGroup === filters.ageGroup;
-
-        const includeTagsMatch = filters.includeTags.length === 0 || 
-          filters.includeTags.every(tag => (char.tags || []).includes(tag));
-
-        const excludeTagsMatch = filters.excludeTags.length === 0 || 
-          !filters.excludeTags.some(tag => (char.tags || []).includes(tag));
-
-        const includeCategoriesMatch = filters.includeCategories.length === 0 ||
-          filters.includeCategories.some(cat => (Array.isArray(char.category) ? char.category : [char.category]).filter(Boolean).includes(cat));
-
-        const excludeCategoriesMatch = filters.excludeCategories.length === 0 ||
-          !filters.excludeCategories.some(cat => (Array.isArray(char.category) ? char.category : [char.category]).filter(Boolean).includes(cat));
-
-        return searchMatch && genderMatch && ageGroupMatch && includeTagsMatch && excludeTagsMatch && includeCategoriesMatch && excludeCategoriesMatch;
-      });
-
-    // 3) Sort (by fuzzy score first if searching, then by chosen sort)
-    filtered.sort((a, b) => {
-      if (term && scoreMap) {
-        const sa = scoreMap.get(a.id) ?? 1;
-        const sb = scoreMap.get(b.id) ?? 1;
-        if (sa !== sb) return sa - sb;
-      }
-      if (filters.sortBy === "rating") return (b.rating || 0) - (a.rating || 0);
-      if (filters.sortBy === "name") return a.name.localeCompare(b.name);
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-
-    return filtered;
-  }, [characters, filters, searchEngine]);
-const activeCount =
+  const activeCount =
     (filters.gender !== "all" ? 1 : 0) +
     (filters.ageGroup !== "all" ? 1 : 0) +
     (filters.sortBy !== "newest" ? 1 : 0) +
-    filters.includeTags.length +
-    filters.excludeTags.length +
-    filters.includeCategories.length +
-    filters.excludeCategories.length;
+    (filters.includeTags?.length || 0) +
+    (filters.excludeTags?.length || 0) +
+    (filters.includeCategories?.length || 0) +
+    (filters.excludeCategories?.length || 0);
 
   const resetFilters = () => {
     setFilters({ search: "", gender: "all", ageGroup: "all", sortBy: "newest", includeTags: [], excludeTags: [], includeCategories: [], excludeCategories: [] });
@@ -218,7 +152,7 @@ const activeCount =
                         <div className="flex flex-wrap gap-2">
                           <FilterChip icon={Users} label="Все" active={filters.ageGroup === "all"} onClick={() => setFilters({ ...filters, ageGroup: "all" })} />
                           <FilterChip icon={Cake} label="18+" active={filters.ageGroup === "18+"} onClick={() => setFilters({ ...filters, ageGroup: "18+" })} />
-                          <FilterChip icon={Clock} label="45+" active={filters.ageGroup === "45+"} onClick={() => setFilters({ ...filters, ageGroup: "45+" })} />
+                          <FilterChip icon={Clock} label="30+" active={filters.ageGroup === "30+"} onClick={() => setFilters({ ...filters, ageGroup: "30+" })} />
                           <FilterChip icon={InfinityIcon} label="Бессмертные" active={filters.ageGroup === "immortal"} onClick={() => setFilters({ ...filters, ageGroup: "immortal" })} />
                         </div>
                       </div>
@@ -230,7 +164,6 @@ const activeCount =
                           <FilterChip icon={ArrowDownAZ} label="По имени (А-Я)" active={filters.sortBy === "name"} onClick={() => setFilters({ ...filters, sortBy: "name" })} />
                         </div>
                       </div>
-                      {/* ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ: Новый раздел фильтрации по тегам ▼▼▼ */}
                       <div className="md:col-span-2">
                         <h4 className="text-sm uppercase tracking-wider mb-3 font-bold" style={{ color: "var(--text-muted)" }}>Категории</h4>
                         <div className="flex flex-wrap gap-2">
@@ -242,7 +175,6 @@ const activeCount =
                           })}
                         </div>
                       </div>
-                      {/* ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲ */}
                   </div>
                 </div>
               </motion.div>
@@ -254,10 +186,10 @@ const activeCount =
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {Array.from({ length: 12 }).map((_, i) => <CharacterCardSkeleton key={i} />)}
           </div>
-        ) : finalFilteredCharacters.length > 0 ? (
+        ) : filteredCharacters.length > 0 ? ( // ▼▼▼ ИЗМЕНЕНИЕ №2: Используем `filteredCharacters` здесь ▼▼▼
           <motion.div layout className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             <AnimatePresence>
-              {finalFilteredCharacters.map((c, i) => (
+              {filteredCharacters.map((c) => ( // ▼▼▼ ИЗМЕНЕНИЕ №3: И здесь ▼▼▼
                 <motion.div key={c.id} layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.6, ease: [0.25, 0.1, 0.25, 1] }}>
                   <CharacterCard character={c} onClick={() => navigate(`/characters/${c.id}`)} />
                 </motion.div>
@@ -285,4 +217,4 @@ const activeCount =
   ); 
 }
 
-export default CharactersPage; 
+export default CharactersPage;

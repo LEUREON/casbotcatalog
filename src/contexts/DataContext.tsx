@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useRef,
 import { pb } from '../lib/pocketbase';
 import { Character, User, FilterState, ShopItem, Message, Notification, Newsletter } from '../types';
 import { useAuth } from './AuthContext';
+import { getAgeGroup } from '../utils/getAgeGroup'; // <--- ИЗМЕНЕНИЕ №1: Импортируем вашу функцию
 
 type ShopItems = ShopItem[];
 type Messages = Message[];
@@ -58,7 +59,8 @@ const formatCharacter = (record: any): Character => ({
     category: record.category || [],
     dominantColor: record.dominantColor || '',
     links: Array.isArray(record.links) ? record.links : [],
-    isNew: record.isNew || false, // Убедимся, что isNew всегда boolean
+    isNew: record.isNew || false,
+    ageGroup: getAgeGroup(record.age), // <--- ИЗМЕНЕНИЕ №2: Применяем функцию здесь
 });
 const formatUser = (model: any): User => ({ id: model.id, username: model.username, nickname: model.nickname, email: model.email, role: model.role, avatar: model.avatar ? pb.getFileUrl(model, model.avatar) : undefined, createdAt: new Date(model.created), isBlocked: model.is_blocked || false, favorites: model.favorites || [] });
 const formatShopItem = (record: any): ShopItem => ({
