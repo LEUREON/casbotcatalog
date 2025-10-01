@@ -663,40 +663,6 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
             </motion.a>
           </section>
 
-          {/* Кнопка выхода — ГРАДИЕНТНЫЙ ФОН И ТЕНИ */}
-          {user && (
-            <section className="flex flex-col gap-3 mt-8">
-              <motion.button
-                {...ANIM.buttonTap}
-                onClick={handleLogout}
-                className="w-full rounded-2xl flex items-center gap-4 px-5 py-4"
-                style={{
-                  background: `linear-gradient(135deg, #ff6b6b, #ee5a52)`,
-                  color: "#ffffff",
-                  boxShadow: "0 6px 20px rgba(255, 107, 107, 0.3)",
-                }}
-              >
-                <div
-                  className="flex items-center justify-center rounded-full"
-                  style={{
-                    width: 44, 
-                    height: 44, 
-                    background: "rgba(255, 255, 255, 0.2)",
-                  }}
-                >
-                  <IconBase icon={LogOut} size="dockLg" />
-                </div>
-                
-                <div className="min-w-0 flex-1">
-                  <p className="font-bold text-lg">
-                    Выйти из аккаунта
-                  </p>
-                </div>
-
-                <IconBase icon={ChevronRight} size="row" />
-              </motion.button>
-            </section>
-          )}
         </div>
       </motion.div>
     </div>
