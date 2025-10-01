@@ -1,8 +1,7 @@
-import { createPortal } from "react-dom";
 // project/src/components/Layout/MobileNavigation.tsx
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion"; 
 import {
   Compass, BarChart2, Heart, Users, Menu as MenuIcon, ShoppingBag, Bell,
   LifeBuoy, Bot, Plus, Settings, LogIn, X, ChevronRight, LogOut, Cat,
@@ -231,7 +230,7 @@ function getUnreadCountFrom(auth: any): number {
 
 /* ========================================================================================= */
 export function MobileNavigation() {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const html = document.documentElement;
@@ -268,6 +267,7 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  useReducedMotion();
 
   const items = useMemo(
     () => [
@@ -279,18 +279,10 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
     ],
     [user, unread, openMenu]
   );
-  
-return typeof window !== "undefined" ? createPortal((
-    <nav 
-        className="fixed left-0 right-0 z-40 lg:hidden"
-        aria-label="Нижняя навигация" 
-        style={{ 
-            bottom: 'calc(12px + var(--app-vvb, 0px) + env(safe-area-inset-bottom, 0px))',
-            WebkitTransform: "translateZ(0)", 
-            willChange: "transform" 
-        }}
-    >
-      <div className="mx-auto max-w-[820px] px-3" style={{ pointerEvents: "auto" }} >
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" aria-label="Нижняя навигация">
+      <div className="mx-auto max-w-[820px] px-3 pb-3 pt-2" style={{ pointerEvents: "auto" }}>
         <div
           className="w-full rounded-2xl border backdrop-blur-xl"
           style={{
@@ -370,18 +362,24 @@ return typeof window !== "undefined" ? createPortal((
           </ul>
         </div>
       </div>
-    </nav>), document.body) : null;
+    </nav>
+  );
 }
 
 /* ===== Полноэкранное меню: АНИМИРОВАННОЕ, С ГРАДИЕНТАМИ И ТЕНЯМИ ===== */
 function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: number; unread: number }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const pulseEnabled = useMemo(() => location.pathname !== "/notifications" && unread > 0, [location.pathname, unread]);
   const auth = (useAuth() as any) || {};
   const user = auth?.user;
 
   const reduce = useReducedMotion();
   const sheetTransition = reduce ? { duration: 0 } : { type: "tween", ease: "easeOut", duration: 0.28 };
+
+  // Параллакс для фона
+  const { scrollY } = useScroll();
+  const bgIntensity = useTransform(scrollY, [0, 500], [0.3, 0.1]);
 
   const handleLogout = async () => {
     try {
@@ -426,14 +424,15 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
   ];
 
   return (
-    <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label="Мобильное меню">
-      <ThemedBackground />
+    <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true" aria-label="Мобильное меню">
+      <ThemedBackground intensity={bgIntensity} className="z-0" />
+      <motion.div className="absolute inset-0 bg-black/50 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }} />
 
       <motion.div
         initial={{ y: 24, opacity: 0.98 }} animate={{ y: 0, opacity: 1 }}
         className="absolute inset-x-0 bottom-0 top-0 overflow-y-auto overscroll-contain"
         transition={sheetTransition} exit={{ opacity: 0, transition: { duration: 0 } }}>
-        <div className="mx-auto max-w-[820px] px-4 pt-4" style={{ paddingBottom: "calc(104px + env(safe-area-inset-bottom, 0px))" }}>
+        <div className="mx-auto max-w-[820px] px-4 pt-4 pb-[104px]">
           {/* header — АНИМИРОВАННЫЙ ЗАГОЛОВОК */}
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
@@ -664,8 +663,40 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
             </motion.a>
           </section>
 
-       
-          
+          {/* Кнопка выхода — ГРАДИЕНТНЫЙ ФОН И ТЕНИ */}
+          {user && (
+            <section className="flex flex-col gap-3 mt-8">
+              <motion.button
+                {...ANIM.buttonTap}
+                onClick={handleLogout}
+                className="w-full rounded-2xl flex items-center gap-4 px-5 py-4"
+                style={{
+                  background: `linear-gradient(135deg, #ff6b6b, #ee5a52)`,
+                  color: "#ffffff",
+                  boxShadow: "0 6px 20px rgba(255, 107, 107, 0.3)",
+                }}
+              >
+                <div
+                  className="flex items-center justify-center rounded-full"
+                  style={{
+                    width: 44, 
+                    height: 44, 
+                    background: "rgba(255, 255, 255, 0.2)",
+                  }}
+                >
+                  <IconBase icon={LogOut} size="dockLg" />
+                </div>
+                
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-lg">
+                    Выйти из аккаунта
+                  </p>
+                </div>
+
+                <IconBase icon={ChevronRight} size="row" />
+              </motion.button>
+            </section>
+          )}
         </div>
       </motion.div>
     </div>
@@ -763,5 +794,5 @@ function Row({
     </motion.div>
   );
 }
- 
+
 export default MobileNavigation;

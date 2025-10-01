@@ -1,50 +1,53 @@
 // src/hooks/useTrueViewportHeight.ts
-import { useEffect } from 'react'; 
+import { useEffect } from 'react';
 
 /**
- * Sets CSS vars for reliable viewport height and bottom inset that reacts to
- * mobile browser UI (address bar) and keyboard.
- *
+ * Visual viewport tracker for mobile browsers.
  * Exposes:
- *  --vh   : 1% of *visual* viewport height (fallback to window.innerHeight)
- *  --app-vvb : extra bottom offset (px) caused by shrinking visual viewport,
- *              so you can anchor fixed bars with: bottom: calc(env(safe-area-inset-bottom,0px) + var(--app-vvb, 0px));
+ *  --vh: 1% of visual viewport height
+ *  Теперь НЕ влияет на позиционирование нижнего меню
  */
-const setViewportVars = () => { 
-  const vv = window.visualViewport;
-  const vh = (vv?.height ?? window.innerHeight) * 0.01;
-  (document.documentElement as HTMLElement).style.setProperty('--vh', `${vh}px`);
-
-  // Compute bottom inset between layout viewport and visual viewport
-  let vb = 0;
-  if (vv) {
-    const ih = window.innerHeight;
-    vb = Math.max(0, ih - vv.height - vv.offsetTop);
-  }
-  (document.documentElement as HTMLElement).style.setProperty('--app-vvb', `${vb}px`);
-};
-
-export const useTrueViewportHeight = () => {
+export function useTrueViewportHeight() {
   useEffect(() => {
-    setViewportVars();
+    let raf = 0 as number;
 
-    window.addEventListener('resize', setViewportVars);
-    window.addEventListener('orientationchange', setViewportVars);
+    const calc = () => {
+      const vv = window.visualViewport;
+      
+      // Только устанавливаем --vh для корректной высоты контента
+      const vh = ((vv?.height ?? window.innerHeight) * 0.01);
+      (document.documentElement as HTMLElement).style.setProperty('--vh', `${vh}px`);
+      
+      // Добавляем флаг для определения состояния клавиатуры
+      const keyboardVisible = vv ? (vv.height < window.innerHeight * 0.75) : false;
+      (document.documentElement as HTMLElement).style.setProperty('--keyboard-visible', keyboardVisible ? '1' : '0');
+    };
 
-    // visualViewport listeners (iOS Safari/Chrome)
-    const vv = window.visualViewport;
-    if (vv) {
-      vv.addEventListener('resize', setViewportVars);
-      vv.addEventListener('scroll', setViewportVars);
+    const schedule = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(calc);
+    };
+
+    schedule();
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('orientationchange', schedule);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', schedule);
+      window.visualViewport.addEventListener('scroll', schedule);
     }
 
     return () => {
-      window.removeEventListener('resize', setViewportVars);
-      window.removeEventListener('orientationchange', setViewportVars);
-      if (vv) {
-        vv.removeEventListener('resize', setViewportVars);
-        vv.removeEventListener('scroll', setViewportVars);
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule as any);
+      window.removeEventListener('orientationchange', schedule);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', schedule);
+        window.visualViewport.removeEventListener('scroll', schedule);
       }
     };
   }, []);
-};
+}
+
+export default useTrueViewportHeight;
