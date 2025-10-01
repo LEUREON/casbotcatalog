@@ -1,34 +1,26 @@
 import { useRef, useCallback } from 'react';
 
 export function useScrollLock() {
-  const scrollPosition = useRef(0);
+  const scrollYRef = useRef(0);
   const isLocked = useRef(false);
 
   const lockScroll = useCallback(() => {
     if (isLocked.current) return;
-    
-    scrollPosition.current = window.scrollY;
+    scrollYRef.current = window.scrollY || window.pageYOffset || 0;
     isLocked.current = true;
-    
-    // Сохраняем текущую позицию прокрутки
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollPosition.current}px`;
-    document.body.style.width = '100%';
+    document.documentElement.classList.add('scroll-locked');
+    document.body.classList.add('scroll-locked');
   }, []);
 
   const unlockScroll = useCallback(() => {
     if (!isLocked.current) return;
-    
     isLocked.current = false;
-    
-    // Восстанавливаем позицию прокрутки
-    const scrollY = document.body.style.top;
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
-    
-    window.scrollTo(0, parseInt(scrollY || '0') * -1);
+    document.documentElement.classList.remove('scroll-locked');
+    document.body.classList.remove('scroll-locked');
+    window.scrollTo(0, scrollYRef.current);
   }, []);
 
   return { lockScroll, unlockScroll };
 }
+
+export default useScrollLock;

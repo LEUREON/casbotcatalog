@@ -22,7 +22,6 @@ import { UserCharactersPage } from './pages/UserCharactersPage';
 import { SubmitCharacterPage } from './pages/SubmitCharacterPage';
 import { NotificationsPage } from './pages/NotificationsPage';
 import Preloader from './components/common/Preloader';
-import VirtualKeyboardRoot from './components/common/VirtualKeyboardRoot';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useTrueViewportHeight } from './hooks/useTrueViewportHeight'; // <-- 1. ИМПОРТИРУЕМ ХУК
 
@@ -94,7 +93,7 @@ function AppContent() {
 function App() {
   return (
     <Router>
-      <VirtualKeyboardRoot>
+      
         <AuthProvider>
         <DataProvider>
           <UserCharactersProvider>
@@ -104,7 +103,7 @@ function App() {
           </UserCharactersProvider>
         </DataProvider>
       </AuthProvider>
-      </VirtualKeyboardRoot>
+      
     </Router>
   );
 }
