@@ -94,10 +94,15 @@ export async function ensureFreshAuth(): Promise<void> {
     const now = Date.now();
     const left = expMs - now;
     if (left < 60_000) {
+      console.log('[Auth] Token is old, refreshing...');
       await pb.collection('users').authRefresh();
+      console.log('[Auth] Token refresh successful.');
     }
-  } catch {
-    // ignore
+  } catch (error) { // --- ИЗМЕНЕНО ---
+    // --- НОВЫЙ КОД ---
+    console.warn('[Auth] Token refresh failed. Token is invalid.', error);
+    throw error; // Бросаем ошибку, чтобы AuthContext мог ее поймать
+    // --- КОНЕЦ НОВОГО КОДА ---
   }
 }
 
