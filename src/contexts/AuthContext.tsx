@@ -52,12 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 1. Сначала вручную и напрямую очищаем localStorage
       localStorage.removeItem('cas_auth_v1'); 
     } finally {
-      // 2. Очищаем состояние в PocketBase, что вызовет обновление UI
+      // 2. Очищаем состояние в PocketBase
       pb.authStore.clear();
-      // 3. Перенаправляем на главную, чтобы надежно сбросить состояние React
-      if (window.location.pathname !== '/') {
-        window.location.href = '/';
-      }
+      // 3. Гарантированно перезагружаем страницу, чтобы разорвать цикл
+      // Используем setTimeout, чтобы дать localStorage время на очистку
+      setTimeout(() => {
+        window.location.reload();
+      }, 0);
     }
   }, []);
   // --- КОНЕЦ ИЗМЕНЕНИЯ ---
