@@ -42,17 +42,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const unsubBlockRef = useRef<null | (() => Promise<void> | void)>(null);
 
+  // --- ИЗМЕНЕНО --- (Финальное исправление "гонки состояний")
   const logout = useCallback(() => {
+    console.log('[Auth] Выполнение принудительного выхода...');
     try {
       if (unsubBlockRef.current) {
         try {
           unsubBlockRef.current();
         } catch {}
       }
+      // 1. Сначала вручную и напрямую очищаем localStorage
+      localStorage.removeItem('cas_auth_v1'); 
     } finally {
+      // 2. Затем очищаем состояние в PocketBase, что вызовет обновление UI
       pb.authStore.clear();
     }
   }, []);
+  // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
   useEffect(() => {
     // 1) restore cached auth
@@ -98,21 +104,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Keep token fresh
   useEffect(() => {
-    // Обёртка для вызова, которая ловит ошибки
     const safeEnsureFreshAuth = async (type: 'Первичная' | 'Периодическая') => {
-      // Только пытаемся обновить, если токен *думает*, что он валидный
       if (!pb.authStore.isValid) return; 
       try {
         console.log(`[Auth] ${type} проверка актуальности токена...`);
         await ensureFreshAuth();
       } catch (error) {
-        // Если ensureFreshAuth бросил ошибку, значит токен "мертвый"
         console.warn(`[Auth] ${type} проверка не удалась. Принудительный выход.`);
-        logout(); // Выходим из системы
+        logout();
       }
     };
 
-    // 1. Сразу проверяем токен при загрузке
     safeEnsureFreshAuth('Первичная');
 
     const onVis = () => {
@@ -122,8 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('online', onOnline);
 
-    // 2. Устанавливаем интервал на 30 секунд
-    const interval = setInterval(() => safeEnsureFreshAuth('Периодическая'), 30000); // 30 секунд
+    const interval = setInterval(() => safeEnsureFreshAuth('Периодическая'), 30000);
 
     return () => {
       document.removeEventListener('visibilitychange', onVis);
@@ -212,7 +213,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       : [...current, characterId];
     try {
       await pb.collection('users').update(user.id, { favorites: next });
-      // Optimistic update
       setUser((prev) => (prev ? { ...prev, favorites: next } : prev));
     } catch (error) {
       console.error('Failed to update favorites:', error);
