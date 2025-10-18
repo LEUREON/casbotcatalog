@@ -2,11 +2,8 @@
 import PocketBase from 'pocketbase';
 import type { User } from '../types';
 
-// 1) Init client
-const pocketbaseUrl = import.meta.env.VITE_POCKETBASE_URL;
-if (!pocketbaseUrl) {
-  throw new Error('VITE_POCKETBASE_URL is not set in your .env file!');
-}
+// 1) Init client (жёстко задан твой домен; без /api — SDK сам добавит /api)
+const pocketbaseUrl = 'https://casdatabase.ru';
 export const pb = new PocketBase(pocketbaseUrl);
 
 // 2) Persistence (localStorage), чтобы сессия переживала перезагрузки
@@ -119,4 +116,3 @@ export async function subscribeUserBlock(onBlocked: () => void): Promise<() => P
     } catch {}
   };
 }
- 
