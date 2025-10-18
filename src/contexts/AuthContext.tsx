@@ -98,6 +98,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Keep token fresh
   useEffect(() => {
+    // --- НОВЫЙ КОД ---
+    // 1. Сразу проверяем токен при загрузке (по вашему запросу)
+    console.log('[Auth] Первичная проверка актуальности токена...');
+    ensureFreshAuth();
+    // --- КОНЕЦ НОВОГО КОДА ---
+
     const onVis = () => {
       if (document.visibilityState === 'visible') ensureFreshAuth();
     };
@@ -106,12 +112,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener('online', onOnline);
 
     // --- ИЗМЕНЕНО ---
-    // Уменьшаем интервал до 30 секунд, чтобы "победить" в гонке состояний
-    // и обновлять токен ДО того, как он истечет.
+    // 2. Устанавливаем интервал на 30 секунд (вместо 60)
     const interval = setInterval(() => {
-      console.log('[Auth] Проверка актуальности токена...');
+      console.log('[Auth] Периодическая проверка актуальности токена...');
       ensureFreshAuth();
-    }, 30000); // Было 60_000
+    }, 30000); // 30 секунд
     // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
     return () => {
