@@ -35,7 +35,6 @@ export function restoreAuth() {
     }
 
     // Ручная проверка токена на истечение СРОКА ДЕЙСТВИЯ
-    // Это "лечит" пользователей, которые "застряли" с мертвым токеном.
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       const expMs = payload.exp * 1000;
@@ -52,7 +51,6 @@ export function restoreAuth() {
       return; // Токен поврежден
     }
 
-    // Если мы дошли сюда, токен существует И он еще не истек.
     pb.authStore.save(token, model as any);
   } catch (e) {
     console.error('[Auth] Не удалось восстановить сессию:', e);
@@ -65,22 +63,11 @@ restoreAuth();
 // keep in sync
 pb.authStore.onChange(() => persistAuth(), true);
 
-// Этот код ловит другие сбои (токен отозван сервером, а не просто истек)
-// и принудительно перезагружает страницу, чтобы "разлогинить" пользователя в UI.
-pb.authStore.onChange((token, model) => {
-  if (
-    !token &&
-    !model &&
-    window.location.pathname !== '/' &&
-    !window.location.pathname.startsWith('/admin')
-  ) {
-    console.warn(
-      'Auth token is invalid or expired. Forcing logout via reload.',
-    );
-    pb.authStore.clear();
-    window.location.reload();
-  }
-}, true);
+// --- ИЗМЕНЕНО ---
+// Проблемный обработчик с window.location.reload() был ПОЛНОСТЬЮ УДАЛЕН отсюда.
+// Управление выходом из системы теперь полностью в AuthContext.tsx.
+// --- КОНЕЦ ИЗМЕНЕНИЯ ---
+
 
 // 3) Helpers
 export const formatUser = (model: RecordModel | null): User | null => {
@@ -100,7 +87,7 @@ export const formatUser = (model: RecordModel | null): User | null => {
   };
 };
 
-// Refresh JWT a bit before expiry (so it doesn't "слетать")
+// Refresh JWT a bit before expiry
 export async function ensureFreshAuth(): Promise<void> {
   try {
     if (!pb.authStore.model || !pb.authStore.token) return;
@@ -110,7 +97,6 @@ export async function ensureFreshAuth(): Promise<void> {
     const now = Date.now();
     const left = expMs - now;
 
-    // Обновляем, если осталось меньше 1 минуты
     if (left < 60000) { // 1 минута
       console.log('[Auth] Token is old, refreshing...');
       await pb.collection('users').authRefresh();
@@ -118,11 +104,11 @@ export async function ensureFreshAuth(): Promise<void> {
     }
   } catch (error) {
     console.warn('[Auth] Token refresh failed. Token is invalid.', error);
-    throw error; // Бросаем ошибку, чтобы AuthContext мог ее поймать
+    throw error;
   }
 }
 
-// Live watch for block status; returns unsubscribe
+// Live watch for block status
 export async function subscribeUserBlock(onBlocked: () => void) {
   const model = pb.authStore.model;
   if (!model) return () => {};
@@ -144,3 +130,4 @@ export async function subscribeUserBlock(onBlocked: () => void) {
     } catch {}
   };
 }
+
