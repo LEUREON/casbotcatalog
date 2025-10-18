@@ -19,7 +19,6 @@ interface AuthContextType {
   login: (identity: string, pass: string) => Promise<LoginStatus>;
   logout: () => void;
 
-  // Доп. методы (минимальная реализация — чтобы не ломать импорты)
   register: (
     username: string,
     nickname: string,
@@ -39,7 +38,6 @@ interface AuthContextType {
 
   isUserBlocked: () => boolean;
 
-  // Для диалога аутентификации (если используется в UI)
   authState: { isOpen: boolean; mode: AuthDialogMode };
   openAuthDialog: (mode?: AuthDialogMode) => void;
   closeAuthDialog: () => void;
