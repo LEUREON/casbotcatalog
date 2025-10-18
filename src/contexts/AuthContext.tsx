@@ -45,20 +45,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // --- ИЗМЕНЕНО --- (Финальное исправление "гонки состояний")
   const logout = useCallback(() => {
     console.log('[Auth] Выполнение принудительного выхода...');
-    try {
-      if (unsubBlockRef.current) {
-        try { unsubBlockRef.current(); } catch {}
-      }
-      // 1. Сначала вручную и напрямую очищаем localStorage
-      localStorage.removeItem('cas_auth_v1'); 
-    } finally {
-      // 2. Очищаем состояние в PocketBase
-      pb.authStore.clear();
-      // 3. Гарантированно перезагружаем страницу, чтобы разорвать цикл
-      // Используем setTimeout, чтобы дать localStorage время на очистку
-      setTimeout(() => {
-        window.location.reload();
-      }, 0);
+    
+    // 1. Отписываемся от слушателя блокировки
+    if (unsubBlockRef.current) {
+      try { unsubBlockRef.current(); } catch {}
+    }
+    
+    // 2. Напрямую очищаем localStorage
+    localStorage.removeItem('cas_auth_v1');
+    
+    // 3. Очищаем состояние в PocketBase, что вызовет setUser(null)
+    pb.authStore.clear();
+
+    // 4. Перенаправляем на главную, чтобы надежно сбросить состояние React
+    // Это надежнее, чем window.location.reload()
+    if (window.location.pathname !== '/') {
+      window.location.href = '/';
     }
   }, []);
   // --- КОНЕЦ ИЗМЕНЕНИЯ ---
@@ -72,18 +74,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleAuthChange = (_token: string, model: RecordModel | null) => {
       const formatted = formatUser(model);
       if (formatted?.isBlocked) {
-        pb.authStore.clear();
-        setUser(null);
+        // Если пользователя заблокировали, вызываем наш новый logout
+        logout();
       } else {
         setUser(formatted);
         if (unsubBlockRef.current) {
           try { unsubBlockRef.current(); } catch {}
         }
         if (formatted) {
-          subscribeUserBlock(() => {
-            pb.authStore.clear();
-            setUser(null);
-          })
+          subscribeUserBlock(logout) // При блокировке вызываем logout
             .then((unsub) => { unsubBlockRef.current = unsub; })
             .catch(() => { unsubBlockRef.current = null; });
         }
@@ -248,4 +247,3 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
-
