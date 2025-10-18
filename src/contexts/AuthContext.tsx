@@ -94,37 +94,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unsubscribe();
       } catch {}
     };
-  }, []);
+  }, [logout]); // --- ИЗМЕНЕНО --- (Добавлена зависимость logout)
 
   // Keep token fresh
   useEffect(() => {
     // --- НОВЫЙ КОД ---
-    // 1. Сразу проверяем токен при загрузке (по вашему запросу)
-    console.log('[Auth] Первичная проверка актуальности токена...');
-    ensureFreshAuth();
+    // Обёртка для вызова, которая ловит ошибки
+    const safeEnsureFreshAuth = async (type: 'Первичная' | 'Периодическая') => {
+      // Только пытаемся обновить, если токен *думает*, что он валидный
+      if (!pb.authStore.isValid) return; 
+      try {
+        console.log(`[Auth] ${type} проверка актуальности токена...`);
+        await ensureFreshAuth();
+      } catch (error) {
+        // Если ensureFreshAuth бросил ошибку, значит токен "мертвый"
+        console.warn(`[Auth] ${type} проверка не удалась. Принудительный выход.`);
+        logout(); // Выходим из системы
+      }
+    };
+
+    // 1. Сразу проверяем токен при загрузке
+    safeEnsureFreshAuth('Первичная');
     // --- КОНЕЦ НОВОГО КОДА ---
 
     const onVis = () => {
-      if (document.visibilityState === 'visible') ensureFreshAuth();
+      if (document.visibilityState === 'visible') safeEnsureFreshAuth('Периодическая');
     };
-    const onOnline = () => ensureFreshAuth();
+    const onOnline = () => safeEnsureFreshAuth('Периодическая');
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('online', onOnline);
 
-    // --- ИЗМЕНЕНО ---
-    // 2. Устанавливаем интервал на 30 секунд (вместо 60)
-    const interval = setInterval(() => {
-      console.log('[Auth] Периодическая проверка актуальности токена...');
-      ensureFreshAuth();
-    }, 30000); // 30 секунд
-    // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+    // 2. Устанавливаем интервал на 30 секунд
+    const interval = setInterval(() => safeEnsureFreshAuth('Периодическая'), 30000); // 30 секунд
 
     return () => {
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('online', onOnline);
       clearInterval(interval);
     };
-  }, []);
+  }, [logout]); // --- ИЗМЕНЕНО --- (Добавлена зависимость logout)
 
   const login = async (identity: string, pass: string): Promise<LoginStatus> => {
     try {
