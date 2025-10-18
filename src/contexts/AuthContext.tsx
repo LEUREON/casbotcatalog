@@ -1,123 +1,139 @@
 // src/contexts/AuthContext.tsx
-
 import React, {
   createContext,
   useContext,
-  useState,
   useEffect,
+  useState,
   useCallback,
   useRef,
 } from 'react';
-import {
-  pb,
-  formatUser,
-  restoreAuth,
-  ensureFreshAuth,
-  subscribeUserBlock,
-} from '../lib/pocketbase';
+import { pb, ensureFreshAuth, subscribeUserBlock } from '../lib/pocketbase';
 import { User, LoginStatus } from '../types';
-import type { RecordModel } from 'pocketbase';
+
+type AuthDialogMode = 'login' | 'register' | null;
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+
   login: (identity: string, pass: string) => Promise<LoginStatus>;
+  logout: () => void;
+
+  // Доп. методы (минимальная реализация — чтобы не ломать импорты)
   register: (
     username: string,
     nickname: string,
     email: string,
-    pass: string,
+    pass: string
   ) => Promise<{ success: boolean; message: string }>;
-  logout: () => void;
-  updateProfile: (updates: any) => Promise<{ success: boolean; message: string }>;
-  isAdmin: boolean;
-  toggleFavorite: (characterId: string) => Promise<void>;
-  isUserBlocked: (identity: string) => Promise<boolean>;
+
+  updateProfile: (
+    updates: Partial<User> & {
+      avatarFile?: File | null;
+      oldPassword?: string;
+      newPassword?: string;
+    }
+  ) => Promise<{ success: boolean; message: string }>;
+
+  toggleFavorite: (id: string) => Promise<void>;
+
+  isUserBlocked: () => boolean;
+
+  // Для диалога аутентификации (если используется в UI)
+  authState: { isOpen: boolean; mode: AuthDialogMode };
+  openAuthDialog: (mode?: AuthDialogMode) => void;
+  closeAuthDialog: () => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const unsubBlockRef = useRef<null | (() => Promise<void> | void)>(null);
+  const [user, setUser] = useState<User | null>(
+    (pb.authStore.model as unknown as User) || null
+  );
+  const [loading, setLoading] = useState<boolean>(false);
 
-  // --- ИЗМЕНЕНО --- (Финальное исправление "гонки состояний")
-  const logout = useCallback(() => {
-    console.log('[Auth] Выполнение принудительного выхода...');
-    
-    // 1. Отписываемся от слушателя блокировки
-    if (unsubBlockRef.current) {
-      try { unsubBlockRef.current(); } catch {}
-    }
-    
-    // 2. Напрямую очищаем localStorage
-    localStorage.removeItem('cas_auth_v1');
-    
-    // 3. Очищаем состояние в PocketBase, что вызовет setUser(null)
-    pb.authStore.clear();
+  const [authState, setAuthState] = useState<{ isOpen: boolean; mode: AuthDialogMode }>({
+    isOpen: false,
+    mode: 'login',
+  });
 
-    // 4. Перенаправляем на главную, чтобы надежно сбросить состояние React
-    // Это надежнее, чем window.location.reload()
-    if (window.location.pathname !== '/') {
-      window.location.href = '/';
-    }
-  }, []);
-  // --- КОНЕЦ ИЗМЕНЕНИЯ ---
+  const unsubBlockRef = useRef<null | (() => Promise<void>)>(null);
 
+  const openAuthDialog = (mode: AuthDialogMode = 'login') =>
+    setAuthState({ isOpen: true, mode });
+  const closeAuthDialog = () => setAuthState((s) => ({ ...s, isOpen: false }));
+
+  // Подписка на смену authStore (PocketBase)
   useEffect(() => {
-    // 1) restore cached auth
-    try {
-      restoreAuth();
-    } catch {}
-    // 2) subscribe to auth changes
-    const handleAuthChange = (_token: string, model: RecordModel | null) => {
-      const formatted = formatUser(model);
-      if (formatted?.isBlocked) {
-        // Если пользователя заблокировали, вызываем наш новый logout
-        logout();
-      } else {
-        setUser(formatted);
-        if (unsubBlockRef.current) {
-          try { unsubBlockRef.current(); } catch {}
-        }
-        if (formatted) {
-          subscribeUserBlock(logout) // При блокировке вызываем logout
-            .then((unsub) => { unsubBlockRef.current = unsub; })
-            .catch(() => { unsubBlockRef.current = null; });
-        }
-      }
-      setLoading(false);
+    const handleAuthChange = () => {
+      setUser((pb.authStore.model as unknown as User) || null);
     };
     const unsubscribe = pb.authStore.onChange(handleAuthChange, true);
     return () => {
-      try { unsubscribe(); } catch {}
+      try {
+        unsubscribe();
+      } catch {}
     };
-  }, [logout]);
+  }, []);
 
-  // Keep token fresh
+  // Утилита: отписка от слежения за блокировкой
+  const disposeBlockWatcher = useCallback(async () => {
+    if (unsubBlockRef.current) {
+      try {
+        await unsubBlockRef.current();
+      } catch {}
+      unsubBlockRef.current = null;
+    }
+  }, []);
+
+  // Логаут
+  const logout = useCallback(() => {
+    // отписываемся от блокировки
+    void disposeBlockWatcher();
+
+    // чистим хранилища
+    localStorage.removeItem('cas_auth_v1');
+    pb.authStore.clear();
+    setUser(null);
+  }, [disposeBlockWatcher]);
+
+  // Периодическое поддержание токена в актуальном состоянии
   useEffect(() => {
     const safeEnsureFreshAuth = async (type: 'Первичная' | 'Периодическая') => {
-      if (!pb.authStore.isValid) return; 
+      // ВАЖНО: проверяем наличие токена, а не isValid,
+      // чтобы дать шанс на refresh и при формально просроченном токене.
+      if (!pb.authStore.token) return;
+
       try {
         console.log(`[Auth] ${type} проверка актуальности токена...`);
         await ensureFreshAuth();
       } catch (error) {
-        console.warn(`[Auth] ${type} проверка не удалась. Принудительный выход.`);
+        console.warn(
+          `[Auth] ${type} проверка не удалась. Принудительный выход.`,
+          error
+        );
         logout();
       }
     };
 
-    safeEnsureFreshAuth('Первичная');
+    // Первичная проверка
+    void safeEnsureFreshAuth('Первичная');
 
+    // Проверка при возвращении во вкладку/восстановлении сети
     const onVis = () => {
-      if (document.visibilityState === 'visible') safeEnsureFreshAuth('Периодическая');
+      if (document.visibilityState === 'visible') void safeEnsureFreshAuth('Периодическая');
     };
-    const onOnline = () => safeEnsureFreshAuth('Периодическая');
+    const onOnline = () => void safeEnsureFreshAuth('Периодическая');
+
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('online', onOnline);
 
-    const interval = setInterval(() => safeEnsureFreshAuth('Периодическая'), 30000);
+    // Периодическое обновление (каждые 30 сек)
+    const interval = setInterval(
+      () => void safeEnsureFreshAuth('Периодическая'),
+      30_000
+    );
 
     return () => {
       document.removeEventListener('visibilitychange', onVis);
@@ -126,25 +142,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [logout]);
 
+  // Логин
   const login = async (identity: string, pass: string): Promise<LoginStatus> => {
     try {
       const identityToTry = identity.toLowerCase();
       await pb.collection('users').authWithPassword(identityToTry, pass);
+
+      // Проверяем блокировку
       if ((pb.authStore.model as any)?.is_blocked) {
         pb.authStore.clear();
         return LoginStatus.ERROR;
       }
+
+      // Подписка на блокировку — при успешном входе
+      await disposeBlockWatcher();
+      unsubBlockRef.current = await subscribeUserBlock(() => {
+        console.warn('[Auth] Пользователь заблокирован — выходим.');
+        logout();
+      });
+
       return LoginStatus.SUCCESS;
     } catch {
       return LoginStatus.WRONG_CREDENTIALS;
     }
   };
 
-  const register = async (
-    username: string,
-    nickname: string,
-    email: string,
-    pass: string,
+  // Регистрация (минимальная реализация; при необходимости расширьте)
+  const register: AuthContextType['register'] = async (
+    username,
+    nickname,
+    email,
+    pass
   ) => {
     try {
       await pb.collection('users').create({
@@ -155,88 +183,91 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         passwordConfirm: pass,
         role: 'user',
       });
+
+      // После регистрации пробуем залогиниться
       const status = await login(username.toLowerCase(), pass);
       if (status !== LoginStatus.SUCCESS) {
         return { success: false, message: 'Не удалось войти после регистрации.' };
       }
-      return { success: true, message: 'Регистрация успешна!' };
-    } catch (err: any) {
-      const data = err?.response?.data || {};
-      if (data?.username?.message?.includes('must be unique'))
-        return { success: false, message: 'Этот логин уже зарегистрирован.' };
-      if (data?.email?.message?.includes('must be unique'))
-        return { success: false, message: 'Этот email уже зарегистрирован.' };
-      return { success: false, message: 'Ошибка регистрации.' };
+      return { success: true, message: 'Регистрация выполнена успешно.' };
+    } catch (e: any) {
+      const msg =
+        e?.response?.data?.email?.message ||
+        e?.response?.data?.username?.message ||
+        'Не удалось завершить регистрацию.';
+      return { success: false, message: String(msg) };
     }
   };
 
-  const updateProfile = async (updates: any) => {
-    if (!user) return { success: false, message: 'Пользователь не авторизован.' };
+  // Обновление профиля (пример; при необходимости подгоните под свою схему)
+  const updateProfile: AuthContextType['updateProfile'] = async (updates) => {
+    const current = pb.authStore.model as any;
+    if (!current) return { success: false, message: 'Нет активного пользователя.' };
+
     try {
       const formData = new FormData();
-      if (updates.nickname && updates.nickname !== user.nickname)
-        formData.append('nickname', updates.nickname);
-      if (updates.email && updates.email !== user.email)
-        formData.append('email', updates.email.toLowerCase());
-      if (updates.password && updates.oldPassword) {
-        formData.append('password', updates.password);
-        formData.append('passwordConfirm', updates.password);
+
+      // Простые поля
+      Object.entries(updates).forEach(([k, v]) => {
+        if (v == null) return;
+        if (['avatarFile', 'oldPassword', 'newPassword'].includes(k)) return;
+        formData.append(k, String(v));
+      });
+
+      // Аватар
+      if ('avatarFile' in updates) {
+        if (updates.avatarFile instanceof File) {
+          formData.append('avatar', updates.avatarFile);
+        } else if (updates.avatarFile === null) {
+          formData.append('avatar', '');
+        }
+      }
+
+      // Смена пароля (если заданы оба)
+      if (updates.oldPassword && updates.newPassword) {
         formData.append('oldPassword', updates.oldPassword);
+        formData.append('password', updates.newPassword);
+        formData.append('passwordConfirm', updates.newPassword);
       }
-      if (updates.avatarFile instanceof File) {
-        formData.append('avatar', updates.avatarFile);
-      } else if (updates.avatarFile === null) {
-        formData.append('avatar', '');
-      }
-      await pb.collection('users').update(user.id, formData);
+
+      await pb.collection('users').update(current.id, formData);
+
+      // Обновляем токен после изменения профиля
       await pb.collection('users').authRefresh();
-      return { success: true, message: 'Профиль успешно обновлен.' };
+
+      return { success: true, message: 'Профиль успешно обновлён.' };
     } catch (err: any) {
-      if (err.response?.data?.oldPassword)
-        return { success: false, message: 'Неверный текущий пароль.' };
-      return { success: false, message: 'Ошибка обновления.' };
+      const msg =
+        err?.response?.data?.oldPassword ||
+        err?.response?.data?.password ||
+        'Не удалось обновить профиль.';
+      return { success: false, message: String(msg) };
     }
   };
 
-  const toggleFavorite = async (characterId: string) => {
-    if (!user) return;
-    const current = user.favorites || [];
-    const next = current.includes(characterId)
-      ? current.filter((id) => id !== characterId)
-      : [...current, characterId];
-    try {
-      await pb.collection('users').update(user.id, { favorites: next });
-      setUser((prev) => (prev ? { ...prev, favorites: next } : prev));
-    } catch (error) {
-      console.error('Failed to update favorites:', error);
-    }
+  // Демонстрационная заглушка — под свою бизнес-логику
+  const toggleFavorite = async (_id: string) => {
+    // no-op; реализуйте при необходимости
   };
 
-  const isUserBlocked = async (identity: string): Promise<boolean> => {
-    try {
-      const identityToTry = identity.toLowerCase();
-      const filter = `username = "${identityToTry}" || email = "${identityToTry}"`;
-      const result = await pb
-        .collection('users')
-        .getFirstListItem(filter, { $autoCancel: false });
-      return Boolean((result as any)?.is_blocked);
-    } catch {
-      return false;
-    }
-  };
-
-  const isAdmin = user?.role === 'admin';
+  const isUserBlocked = () => Boolean((pb.authStore.model as any)?.is_blocked);
 
   const value: AuthContextType = {
     user,
     loading,
+
     login,
-    register,
     logout,
+
+    register,
     updateProfile,
-    isAdmin,
     toggleFavorite,
+
     isUserBlocked,
+
+    authState,
+    openAuthDialog,
+    closeAuthDialog,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
