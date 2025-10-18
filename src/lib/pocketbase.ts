@@ -29,8 +29,35 @@ export function restoreAuth() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const { token, model } = JSON.parse(raw);
-    if (token && model) pb.authStore.save(token, model as any);
-  } catch {}
+    if (!token || !model) {
+      localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+
+    // Ручная проверка токена на истечение СРОКА ДЕЙСТВИЯ
+    // Это "лечит" пользователей, которые "застряли" с мертвым токеном.
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const expMs = payload.exp * 1000;
+      if (expMs < Date.now()) {
+        console.warn(
+          '[Auth] Восстановленный токен истек. Очистка хранилища.',
+        );
+        localStorage.removeItem(STORAGE_KEY);
+        return; // Не загружаем "мертвый" токен
+      }
+    } catch (e) {
+      console.error('[Auth] Не удалось проанализировать токен.', e);
+      localStorage.removeItem(STORAGE_KEY);
+      return; // Токен поврежден
+    }
+
+    // Если мы дошли сюда, токен существует И он еще не истек.
+    pb.authStore.save(token, model as any);
+  } catch (e) {
+    console.error('[Auth] Не удалось восстановить сессию:', e);
+    localStorage.removeItem(STORAGE_KEY);
+  }
 }
 
 // restore immediately (before providers mount)
@@ -38,13 +65,9 @@ restoreAuth();
 // keep in sync
 pb.authStore.onChange(() => persistAuth(), true);
 
-// --- НОВЫЙ КОД ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ АУТЕНТИФИКАЦИИ ---
-// Глобальный обработчик для "протухшей" сессии (ошибки 401/400)
-// Он должен быть *в дополнение* к persistAuth
+// Этот код ловит другие сбои (токен отозван сервером, а не просто истек)
+// и принудительно перезагружает страницу, чтобы "разлогинить" пользователя в UI.
 pb.authStore.onChange((token, model) => {
-  // Если токен и модель пропали (сессия невалидна)
-  // И мы НЕ на главной странице (чтобы избежать цикла перезагрузок)
-  // И НЕ на странице /admin (на всякий случай)
   if (
     !token &&
     !model &&
@@ -54,17 +77,10 @@ pb.authStore.onChange((token, model) => {
     console.warn(
       'Auth token is invalid or expired. Forcing logout via reload.',
     );
-
-    // Принудительно очищаем хранилище
-    // (persistAuth() выше уже должен был это сделать, но для надежности)
     pb.authStore.clear();
-
-    // Перезагрузка - самый простой способ сбросить все состояние React
-    // (контексты, состояния) и "разлогинить" пользователя в UI.
     window.location.reload();
   }
 }, true);
-// --- КОНЕЦ НОВОГО КОДА ---
 
 // 3) Helpers
 export const formatUser = (model: RecordModel | null): User | null => {
@@ -93,16 +109,16 @@ export async function ensureFreshAuth(): Promise<void> {
     const expMs = payload.exp * 1000;
     const now = Date.now();
     const left = expMs - now;
-    if (left < 60_000) {
+
+    // Обновляем, если осталось меньше 1 минуты
+    if (left < 60000) { // 1 минута
       console.log('[Auth] Token is old, refreshing...');
       await pb.collection('users').authRefresh();
       console.log('[Auth] Token refresh successful.');
     }
-  } catch (error) { // --- ИЗМЕНЕНО ---
-    // --- НОВЫЙ КОД ---
+  } catch (error) {
     console.warn('[Auth] Token refresh failed. Token is invalid.', error);
     throw error; // Бросаем ошибку, чтобы AuthContext мог ее поймать
-    // --- КОНЕЦ НОВОГО КОДА ---
   }
 }
 

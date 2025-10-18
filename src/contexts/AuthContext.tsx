@@ -1,4 +1,4 @@
-// project/src/contexts/AuthContext.tsx
+// src/contexts/AuthContext.tsx
 
 import React, {
   createContext,
@@ -94,11 +94,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         unsubscribe();
       } catch {}
     };
-  }, [logout]); // --- ИЗМЕНЕНО --- (Добавлена зависимость logout)
+  }, [logout]);
 
   // Keep token fresh
   useEffect(() => {
-    // --- НОВЫЙ КОД ---
     // Обёртка для вызова, которая ловит ошибки
     const safeEnsureFreshAuth = async (type: 'Первичная' | 'Периодическая') => {
       // Только пытаемся обновить, если токен *думает*, что он валидный
@@ -115,7 +114,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // 1. Сразу проверяем токен при загрузке
     safeEnsureFreshAuth('Первичная');
-    // --- КОНЕЦ НОВОГО КОДА ---
 
     const onVis = () => {
       if (document.visibilityState === 'visible') safeEnsureFreshAuth('Периодическая');
@@ -132,7 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.removeEventListener('online', onOnline);
       clearInterval(interval);
     };
-  }, [logout]); // --- ИЗМЕНЕНО --- (Добавлена зависимость logout)
+  }, [logout]);
 
   const login = async (identity: string, pass: string): Promise<LoginStatus> => {
     try {

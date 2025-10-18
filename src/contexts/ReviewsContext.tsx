@@ -11,7 +11,7 @@ import { pb } from '../lib/pocketbase';
 import { Review, User } from '../types';
 import { useAuth } from './AuthContext';
 import { useData } from './DataContext';
-import { toast } from 'sonner'; // --- ИЗМЕНЕНО --- (Добавлен импорт toast)
+import { toast } from 'sonner'; // --- НОВЫЙ КОД ---
 
 // Helper functions
 const formatUser = (model: any): User => ({
@@ -79,8 +79,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) { // --- ИЗМЕНЕНО ---
       if (!(error as any).isAbort) {
         console.error('Failed to reload reviews:', error);
-        // --- ИЗМЕНЕНО ---
-        toast.error('Не удалось загрузить комментарии', {
+        toast.error('Не удалось загрузить комментарии', { // --- НОВЫЙ КОД ---
           description: error.message,
         });
       }
@@ -98,9 +97,6 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     async (reviewData: any) => {
       if (!user) return false;
       try {
-        // ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ ▼▼▼
-        // Мы явно указываем, какие поля отправлять в базу данных,
-        // исправляя несоответствие 'characterId' на 'character_id'.
         const dataToCreate = {
           user_id: user.id,
           userName: user.nickname,
@@ -113,7 +109,6 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         const record = await pb
           .collection('reviews')
           .create(dataToCreate, { expand: 'user_id,likesBy,dislikesBy' });
-        // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
 
         const newReview = formatReview(record);
         setReviews((prev) => [newReview, ...prev]);
@@ -139,8 +134,7 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         return true;
       } catch (e: any) { // --- ИЗМЕНЕНО ---
         console.error('Error adding review:', e);
-        // --- ИЗМЕНЕНО ---
-        toast.error('Ошибка добавления комментария', { description: e.message });
+        toast.error('Ошибка добавления комментария', { description: e.message }); // --- НОВЫЙ КОД ---
         return false;
       }
     },
