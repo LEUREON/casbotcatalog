@@ -1,7 +1,7 @@
 // project/src/components/Layout/MobileNavigation.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion"; 
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import {
   Compass, BarChart2, Heart, Users, Menu as MenuIcon, ShoppingBag, Bell,
   LifeBuoy, Bot, Plus, Settings, LogIn, X, ChevronRight, LogOut, Cat,
@@ -12,7 +12,49 @@ import { useUnreadTotal } from "../../hooks/useUnreadTotal";
 import ThemedBackground from "../common/ThemedBackground";
 import { useAuth } from "../../contexts/AuthContext";
 
-// ✅ Функции ensureAuth и isAdmin перенесены в начало
+// =========================================================
+// ✅ НОВЫЙ ХУК ДЛЯ ОТСЛЕЖИВАНИЯ КЛАВИАТУРЫ
+// =========================================================
+/**
+ * Хук, который отслеживает видимость виртуальной клавиатуры на мобильных устройствах.
+ * @returns {boolean} `true`, если клавиатура видна, иначе `false`.
+ */
+function useVirtualKeyboardVisible() {
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    // Проверяем, поддерживается ли Visual Viewport API
+    if (typeof window === 'undefined' || !window.visualViewport) {
+      return;
+    }
+
+    const handleResize = () => {
+      // Стандартная высота окна без учета интерфейса браузера
+      const windowHeight = window.innerHeight;
+      // Высота видимой области (уменьшается при появлении клавиатуры)
+      const viewportHeight = window.visualViewport.height;
+
+      // Если разница в высоте существенна (например, больше 150px),
+      // считаем, что клавиатура открыта. Пороговое значение помогает избежать
+      // ложных срабатываний из-за появления/скрытия панелей браузера.
+      const isVisible = (windowHeight - viewportHeight) > 150;
+      setIsKeyboardVisible(isVisible);
+    };
+
+    // Добавляем слушатель события изменения размера видимой области
+    window.visualViewport.addEventListener('resize', handleResize);
+    handleResize(); // Проверяем состояние при монтировании компонента
+
+    // Очистка: удаляем слушатель при размонтировании
+    return () => {
+      window.visualViewport.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
+  return isKeyboardVisible;
+}
+// =========================================================
+
 const ensureAuth = (user: any, to: string) =>
   !user ? `/login?next=${encodeURIComponent(to)}` : to;
 
@@ -268,6 +310,9 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
   const location = useLocation();
   const navigate = useNavigate();
   useReducedMotion();
+  
+  // ✅ ИСПОЛЬЗУЕМ ХУК ДЛЯ ОТСЛЕЖИВАНИЯ КЛАВИАТУРЫ
+  const isKeyboardVisible = useVirtualKeyboardVisible();
 
   const items = useMemo(
     () => [
@@ -281,7 +326,13 @@ function BottomDock({ openMenu, ping, unread }: { openMenu: () => void; ping: nu
   );
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden" aria-label="Нижняя навигация">
+    // ✅ ДОБАВЛЯЕМ КЛАССЫ ДЛЯ ПЛАВНОЙ АНИМАЦИИ СКРЫТИЯ/ПОКАЗА
+    <nav 
+      className={`fixed bottom-0 left-0 right-0 z-40 md:hidden transition-transform duration-300 ease-in-out ${
+        isKeyboardVisible ? 'translate-y-full' : 'translate-y-0'
+      }`} 
+      aria-label="Нижняя навигация"
+    >
       <div className="mx-auto max-w-[820px] px-3 pb-3 pt-2" style={{ pointerEvents: "auto" }}>
         <div
           className="w-full rounded-2xl border backdrop-blur-xl"
@@ -663,6 +714,40 @@ function FullScreenMenu({ onClose, ping, unread }: { onClose: () => void; ping: 
             </motion.a>
           </section>
 
+          {/* Кнопка выхода — ГРАДИЕНТНЫЙ ФОН И ТЕНИ */}
+          {user && (
+            <section className="flex flex-col gap-3 mt-8">
+              <motion.button
+                {...ANIM.buttonTap}
+                onClick={handleLogout}
+                className="w-full rounded-2xl flex items-center gap-4 px-5 py-4"
+                style={{
+                  background: `linear-gradient(135deg, #ff6b6b, #ee5a52)`,
+                  color: "#ffffff",
+                  boxShadow: "0 6px 20px rgba(255, 107, 107, 0.3)",
+                }}
+              >
+                <div
+                  className="flex items-center justify-center rounded-full"
+                  style={{
+                    width: 44, 
+                    height: 44, 
+                    background: "rgba(255, 255, 255, 0.2)",
+                  }}
+                >
+                  <IconBase icon={LogOut} size="dockLg" />
+                </div>
+                
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-lg">
+                    Выйти из аккаунта
+                  </p>
+                </div>
+
+                <IconBase icon={ChevronRight} size="row" />
+              </motion.button>
+            </section>
+          )}
         </div>
       </motion.div>
     </div>

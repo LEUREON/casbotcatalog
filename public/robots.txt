@@ -1,0 +1,12 @@
+# public/robots.txt
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /profile
+Disallow: /notifications
+
+# Crawl-delay is non-standard; uncomment for specific bots if necessary
+# User-agent: AhrefsBot
+# Crawl-delay: 2
+
+Sitemap: https://cascharacters.ru/sitemap.xml
