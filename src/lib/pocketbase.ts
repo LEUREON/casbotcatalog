@@ -1,5 +1,5 @@
 // src/lib/pocketbase.ts
-import PocketBase, { RecordModel } from 'pocketbase';
+import PocketBase from 'pocketbase';
 import type { User } from '../types';
 
 // 1) Init client
@@ -9,7 +9,7 @@ if (!pocketbaseUrl) {
 }
 export const pb = new PocketBase(pocketbaseUrl);
 
-// 2) Robust persistence (localStorage) so auth survives reloads
+// 2) Persistence (localStorage), чтобы сессия переживала перезагрузки
 const STORAGE_KEY = 'cas_auth_v1';
 
 function persistAuth() {
@@ -24,79 +24,63 @@ function persistAuth() {
   } catch {}
 }
 
-export function restoreAuth() {
+/**
+ * ВАЖНО: не выкидываем восстановленный токен сразу по локальной проверке exp.
+ * Сначала кладём его в authStore, затем пробуем обновить.
+ * Если сервер отказал — тогда чистим.
+ */
+function restoreAuth() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
-    const { token, model } = JSON.parse(raw);
+
+    const { token, model } = JSON.parse(raw) as {
+      token?: string;
+      model?: unknown;
+    };
+
     if (!token || !model) {
       localStorage.removeItem(STORAGE_KEY);
       return;
     }
 
-    // Ручная проверка токена на истечение СРОКА ДЕЙСТВИЯ
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const expMs = payload.exp * 1000;
-      if (expMs < Date.now()) {
-        console.warn(
-          '[Auth] Восстановленный токен истек. Очистка хранилища.',
-        );
-        localStorage.removeItem(STORAGE_KEY);
-        return; // Не загружаем "мертвый" токен
-      }
-    } catch (e) {
-      console.error('[Auth] Не удалось проанализировать токен.', e);
-      localStorage.removeItem(STORAGE_KEY);
-      return; // Токен поврежден
-    }
-
+    // 1) Сохраняем, чтобы иметь шанс на refresh даже при рассинхроне часов
     pb.authStore.save(token, model as any);
+
+    // 2) Пробуем сразу обновить
+    ensureFreshAuth(true).catch((e) => {
+      console.warn('[Auth] Не удалось обновить восстановленный токен, очищаем.', e);
+      pb.authStore.clear();
+      localStorage.removeItem(STORAGE_KEY);
+    });
   } catch (e) {
     console.error('[Auth] Не удалось восстановить сессию:', e);
     localStorage.removeItem(STORAGE_KEY);
   }
 }
 
-// restore immediately (before providers mount)
+// Восстанавливаем до монтирования провайдеров
 restoreAuth();
-// keep in sync
+
+// Держим localStorage в актуальном состоянии
 pb.authStore.onChange(() => persistAuth(), true);
 
-// --- ИЗМЕНЕНО ---
-// Проблемный обработчик с window.location.reload() был ПОЛНОСТЬЮ УДАЛЕН отсюда.
-// Управление выходом из системы теперь полностью в AuthContext.tsx.
-// --- КОНЕЦ ИЗМЕНЕНИЯ ---
-
-// 3) Helpers
-export const formatUser = (model: RecordModel | null): User | null => {
-  if (!model) return null;
-  return {
-    id: model.id,
-    username: (model as any).username,
-    nickname: (model as any).nickname,
-    email: (model as any).email,
-    role: (model as any).role as 'admin' | 'user',
-    avatar: (model as any).avatar
-      ? pb.getFileUrl(model as any, (model as any).avatar)
-      : undefined,
-    createdAt: new Date((model as any).created),
-    isBlocked: Boolean((model as any).is_blocked),
-    favorites: (model as any).favorites || [],
-  };
-};
-
-// Refresh JWT a bit before expiry
-export async function ensureFreshAuth(): Promise<void> {
+/**
+ * Обновление токена, когда остаётся мало времени, либо принудительно.
+ * @param force — принудительно (используется сразу после восстановления)
+ */
+export async function ensureFreshAuth(force = false): Promise<void> {
   try {
     if (!pb.authStore.model || !pb.authStore.token) return;
-    const token = pb.authStore.token;
+
+    const token = pb.authStore.token!;
     const payload = JSON.parse(atob(token.split('.')[1]));
     const expMs = payload.exp * 1000;
     const now = Date.now();
     const left = expMs - now;
 
-    if (left < 60000) { // 1 минута
+    // Обновляем заранее (за 5 минут) или сразу при force
+    if (force || left < 5 * 60_000) {
       console.log('[Auth] Token is old, refreshing...');
       await pb.collection('users').authRefresh();
       console.log('[Auth] Token refresh successful.');
@@ -107,20 +91,26 @@ export async function ensureFreshAuth(): Promise<void> {
   }
 }
 
-// Live watch for block status
-export async function subscribeUserBlock(onBlocked: () => void) {
-  const model = pb.authStore.model;
-  if (!model) return () => {};
-  const id = model.id;
+/**
+ * Подписка на блокировку пользователя (пример — поле is_blocked в коллекции users).
+ * Возвращает функцию отписки.
+ */
+export async function subscribeUserBlock(onBlocked: () => void): Promise<() => Promise<void>> {
+  const model = pb.authStore.model as unknown as User | null;
+  if (!model) return async () => {};
+
+  const id = (model as any).id as string;
   let unsubbed = false;
+
   try {
     await pb.collection('users').subscribe(id, (e: any) => {
       const rec = e.record as any;
       if (rec?.is_blocked) onBlocked();
     });
   } catch {
-    // ignore
+    // игнорируем
   }
+
   return async () => {
     if (unsubbed) return;
     unsubbed = true;
