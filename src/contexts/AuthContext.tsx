@@ -47,15 +47,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('[Auth] Выполнение принудительного выхода...');
     try {
       if (unsubBlockRef.current) {
-        try {
-          unsubBlockRef.current();
-        } catch {}
+        try { unsubBlockRef.current(); } catch {}
       }
       // 1. Сначала вручную и напрямую очищаем localStorage
       localStorage.removeItem('cas_auth_v1'); 
     } finally {
-      // 2. Затем очищаем состояние в PocketBase, что вызовет обновление UI
+      // 2. Очищаем состояние в PocketBase, что вызовет обновление UI
       pb.authStore.clear();
+      // 3. Перенаправляем на главную, чтобы надежно сбросить состояние React
+      if (window.location.pathname !== '/') {
+        window.location.href = '/';
+      }
     }
   }, []);
   // --- КОНЕЦ ИЗМЕНЕНИЯ ---
@@ -73,32 +75,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(null);
       } else {
         setUser(formatted);
-        // (re)subscribe to user block flag
         if (unsubBlockRef.current) {
-          try {
-            unsubBlockRef.current();
-          } catch {}
+          try { unsubBlockRef.current(); } catch {}
         }
         if (formatted) {
           subscribeUserBlock(() => {
             pb.authStore.clear();
             setUser(null);
           })
-            .then((unsub) => {
-              unsubBlockRef.current = unsub;
-            })
-            .catch(() => {
-              unsubBlockRef.current = null;
-            });
+            .then((unsub) => { unsubBlockRef.current = unsub; })
+            .catch(() => { unsubBlockRef.current = null; });
         }
       }
       setLoading(false);
     };
     const unsubscribe = pb.authStore.onChange(handleAuthChange, true);
     return () => {
-      try {
-        unsubscribe();
-      } catch {}
+      try { unsubscribe(); } catch {}
     };
   }, [logout]);
 
@@ -254,3 +247,4 @@ export const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
+
