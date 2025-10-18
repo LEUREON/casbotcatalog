@@ -38,6 +38,34 @@ restoreAuth();
 // keep in sync
 pb.authStore.onChange(() => persistAuth(), true);
 
+// --- НОВЫЙ КОД ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ АУТЕНТИФИКАЦИИ ---
+// Глобальный обработчик для "протухшей" сессии (ошибки 401/400)
+// Он должен быть *в дополнение* к persistAuth
+pb.authStore.onChange((token, model) => {
+  // Если токен и модель пропали (сессия невалидна)
+  // И мы НЕ на главной странице (чтобы избежать цикла перезагрузок)
+  // И НЕ на странице /admin (на всякий случай)
+  if (
+    !token &&
+    !model &&
+    window.location.pathname !== '/' &&
+    !window.location.pathname.startsWith('/admin')
+  ) {
+    console.warn(
+      'Auth token is invalid or expired. Forcing logout via reload.',
+    );
+
+    // Принудительно очищаем хранилище
+    // (persistAuth() выше уже должен был это сделать, но для надежности)
+    pb.authStore.clear();
+
+    // Перезагрузка - самый простой способ сбросить все состояние React
+    // (контексты, состояния) и "разлогинить" пользователя в UI.
+    window.location.reload();
+  }
+}, true);
+// --- КОНЕЦ НОВОГО КОДА ---
+
 // 3) Helpers
 export const formatUser = (model: RecordModel | null): User | null => {
   if (!model) return null;
@@ -47,7 +75,9 @@ export const formatUser = (model: RecordModel | null): User | null => {
     nickname: (model as any).nickname,
     email: (model as any).email,
     role: (model as any).role as 'admin' | 'user',
-    avatar: (model as any).avatar ? pb.getFileUrl(model as any, (model as any).avatar) : undefined,
+    avatar: (model as any).avatar
+      ? pb.getFileUrl(model as any, (model as any).avatar)
+      : undefined,
     createdAt: new Date((model as any).created),
     isBlocked: Boolean((model as any).is_blocked),
     favorites: (model as any).favorites || [],
@@ -88,6 +118,8 @@ export async function subscribeUserBlock(onBlocked: () => void) {
   return async () => {
     if (unsubbed) return;
     unsubbed = true;
-    try { await pb.collection('users').unsubscribe(id); } catch {}
+    try {
+      await pb.collection('users').unsubscribe(id);
+    } catch {}
   };
 }
