@@ -68,7 +68,6 @@ pb.authStore.onChange(() => persistAuth(), true);
 // Управление выходом из системы теперь полностью в AuthContext.tsx.
 // --- КОНЕЦ ИЗМЕНЕНИЯ ---
 
-
 // 3) Helpers
 export const formatUser = (model: RecordModel | null): User | null => {
   if (!model) return null;
@@ -130,4 +129,3 @@ export async function subscribeUserBlock(onBlocked: () => void) {
     } catch {}
   };
 }
-
