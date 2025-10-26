@@ -11,7 +11,7 @@ import { pb } from '../lib/pocketbase';
 import { Review, User } from '../types';
 import { useAuth } from './AuthContext';
 import { useData } from './DataContext';
-import { toast } from 'sonner'; // --- ИЗМЕНЕНО --- (Добавлен импорт toast)
+import { toast } from 'sonner';
 
 // Helper functions
 const formatUser = (model: any): User => ({
@@ -76,10 +76,9 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         $autoCancel: false,
       });
       setReviews(records.map(formatReview));
-    } catch (error: any) { // --- ИЗМЕНЕНО ---
+    } catch (error: any) {
       if (!(error as any).isAbort) {
         console.error('Failed to reload reviews:', error);
-        // --- ИЗМЕНЕНО ---
         toast.error('Не удалось загрузить комментарии', {
           description: error.message,
         });
@@ -98,12 +97,9 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
     async (reviewData: any) => {
       if (!user) return false;
       try {
-        // ▼▼▼ ИЗМЕНЕНИЕ ЗДЕСЬ ▼▼▼
-        // Мы явно указываем, какие поля отправлять в базу данных,
-        // исправляя несоответствие 'characterId' на 'character_id'.
         const dataToCreate = {
           user_id: user.id,
-          userName: user.nickname,
+          userName: (user as any)?.nickname || (user as any)?.username || (user as any)?.name || (user as any)?.email,
           character_id: reviewData.characterId,
           comment: reviewData.comment,
           parentReview: reviewData.parentReview,
@@ -113,7 +109,6 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
         const record = await pb
           .collection('reviews')
           .create(dataToCreate, { expand: 'user_id,likesBy,dislikesBy' });
-        // ▲▲▲ КОНЕЦ ИЗМЕНЕНИЯ ▲▲▲
 
         const newReview = formatReview(record);
         setReviews((prev) => [newReview, ...prev]);
@@ -137,9 +132,8 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
           }
         }
         return true;
-      } catch (e: any) { // --- ИЗМЕНЕНО ---
+      } catch (e: any) {
         console.error('Error adding review:', e);
-        // --- ИЗМЕНЕНО ---
         toast.error('Ошибка добавления комментария', { description: e.message });
         return false;
       }
@@ -163,7 +157,6 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
 
   const toggleReviewFeedback = useCallback(
     async (reviewId: string, type: 'like' | 'dislike') => {
-      // --- ИЗМЕНЕНО --- (Добавлена проверка с toast)
       if (!user) {
         toast.error('Пожалуйста, войдите в систему, чтобы оценить.');
         return;
@@ -214,23 +207,18 @@ export function ReviewsProvider({ children }: { children: React.ReactNode }) {
           });
           await loadNotifications();
         }
-      } catch (error: any) { // --- ИЗМЕНЕНО --- (Блок catch полностью переписан)
+      } catch (error: any) {
         console.error(`Failed to toggle ${type}:`, error);
 
-        // --- НОВЫЙ КОД ---
-        // Проверяем на ошибку 404 (Not Found)
         if (error.status === 404) {
           toast.error('Этот комментарий, похоже, был удален.');
-          // Удаляем "мертвый" отзыв из локального состояния
           setReviews((prev) => prev.filter((r) => r.id !== reviewId));
         } else {
-          // Откатываем оптимистичное обновление, если была другая ошибка
           toast.error('Не удалось оценить комментарий.');
           setReviews((prev) =>
             prev.map((r) => (r.id === reviewId ? originalReview : r)),
           );
         }
-        // --- КОНЕЦ НОВОГО КОДА ---
       }
     },
     [user, reviews, addNotification, loadNotifications],
@@ -262,4 +250,4 @@ export const useReviews = () => {
   const context = useContext(ReviewsContext);
   if (!context) throw new Error('useReviews must be used within a ReviewsProvider');
   return context;
-};
+}; 

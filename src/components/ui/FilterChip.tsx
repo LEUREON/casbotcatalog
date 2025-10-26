@@ -1,32 +1,41 @@
 // src/components/ui/FilterChip.tsx
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ANIM } from '../../lib/animations';
+import cn from 'clsx';
 
+// --- ИСПРАВЛЕНИЯ ЗДЕСЬ ---
 interface FilterChipProps {
-  icon?: React.ComponentType<{ size?: number }>;
   label: string;
-  active?: boolean;
-  onClick?: () => void;
+  isActive: boolean;
+  onClick: () => void;
+  // Добавляем опциональный пропс для кастомных стилей
+  customClasses?: {
+    base?: string;
+    active?: string;
+  };
 }
 
-export const FilterChip = React.memo(
-  ({ icon: Icon, label, active, onClick }: FilterChipProps) => {
-    return (
-      <motion.button
-        {...ANIM.buttonTap}
-        onClick={onClick}
-        className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-medium transition-all duration-300 border
-          ${active
-            ? 'bg-gradient-to-r from-accent-primary to-accent-secondary text-white border-transparent shadow-button'
-            : 'bg-badge-tag text-text-secondary border-default hover:bg-glass-hover'
-          }`
-        }
-      >
-        {Icon && <Icon size={16} />}
-        <span>{label}</span>
-      </motion.button>
-    );
-  }
-);
-FilterChip.displayName = "FilterChip";
+export const FilterChip: React.FC<FilterChipProps> = ({
+  label,
+  isActive,
+  onClick,
+  customClasses = {}, // Значение по умолчанию
+}) => {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      // Применяем кастомные стили, если они есть, или стили по умолчанию
+      className={cn(
+        'select-none whitespace-nowrap rounded-full border px-3 py-1 text-sm font-medium transition-all duration-200 hover:opacity-80 active:scale-95',
+        isActive
+          ? customClasses.active || 'border-indigo-500/50 bg-indigo-500/20 text-indigo-300' // Стили по умолчанию
+          : customClasses.base || 'border-gray-700 bg-gray-800/60 text-gray-300 hover:border-gray-600' // Стили по умолчанию
+      )}
+      whileTap={{ scale: 0.95 }}
+    >
+      {label}
+    </motion.button>
+  );
+};
+// --- КОНЕЦ ИСПРАВЛЕНИЙ ---

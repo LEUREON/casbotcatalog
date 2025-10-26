@@ -1,6 +1,5 @@
-// project/src/App.tsx
-
-import React from 'react';
+// src/App.tsx
+import React, { Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider, useData } from './contexts/DataContext';
@@ -9,42 +8,46 @@ import { ReviewsProvider } from './contexts/ReviewsContext';
 import { Layout } from './components/Layout/Layout';
 import { LoginForm } from './components/Auth/LoginForm';
 import { RegisterForm } from './components/Auth/RegisterForm';
-import { CharactersPage } from './pages/CharactersPage';
-import { CharacterPage } from './pages/CharacterPage';
-import { RatingPage } from './pages/RatingPage';
-import { AdminPanel } from './pages/AdminPanel';
-import { ProfilePage } from './pages/ProfilePage';
-import { ShopPage } from './pages/ShopPage';
-import { FavoritesPage } from './pages/FavoritesPage';
-import { SupportChatPage } from './pages/SupportChatPage';
 import { ScrollManager } from './components/Layout/ScrollManager';
-import { UserCharactersPage } from './pages/UserCharactersPage';
-import { SubmitCharacterPage } from './pages/SubmitCharacterPage';
-import { NotificationsPage } from './pages/NotificationsPage';
 import Preloader from './components/common/Preloader';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useTrueViewportHeight } from './hooks/useTrueViewportHeight'; // <-- 1. ИМПОРТИРУЕМ ХУК
+import { useTrueViewportHeight } from './hooks/useTrueViewportHeight';
 
-// Защищенный роут для админа
+// --- Lazy pages ---
+const CharactersPage      = lazy(() => import('./pages/CharactersPage').then(m => ({ default: m.CharactersPage })));
+const CharacterPage       = lazy(() => import('./pages/CharacterPage').then(m => ({ default: m.CharacterPage })));
+const RatingPage          = lazy(() => import('./pages/RatingPage').then(m => ({ default: m.RatingPage })));
+const AdminPanel          = lazy(() => import('./pages/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const ProfilePage         = lazy(() => import('./pages/ProfilePage').then(m => ({ default: m.ProfilePage })));
+const ShopPage            = lazy(() => import('./pages/ShopPage').then(m => ({ default: m.ShopPage })));
+const FavoritesPage       = lazy(() => import('./pages/FavoritesPage').then(m => ({ default: m.FavoritesPage })));
+const SupportChatPage     = lazy(() => import('./pages/SupportChatPage').then(m => ({ default: m.SupportChatPage })));
+const SubmitCharacterPage = lazy(() => import('./pages/SubmitCharacterPage').then(m => ({ default: m.SubmitCharacterPage })));
+const NotificationsPage   = lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
+
+// 🔹 Страница просмотра одного пользовательского персонажа
+const UserCharacterPage   = lazy(() =>
+  import('./pages/UserCharacterPage').then(m => ({ default: m.default ?? (m as any).UserCharacterPage }))
+);
+
+// --- Guards ---
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   return user?.role === 'admin' ? <>{children}</> : <Navigate to="/" />;
 }
 
-// Защищенный роут для авторизованных пользователей
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-    const { user, loading } = useAuth();
-    if (loading) return null;
-    return user ? <>{children}</> : <Navigate to="/login" />;
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  return user ? <>{children}</> : <Navigate to="/login" />;
 }
 
-// Основной контент приложения с роутингом
+// --- App content with routes ---
 function AppContent() {
   const { loading: dataLoading } = useData();
   const { loading: authLoading } = useAuth();
-  
-  useTrueViewportHeight(); // <-- 2. ВЫЗЫВАЕМ ХУК
+  useTrueViewportHeight();
 
   const isLoading = dataLoading || authLoading;
 
@@ -53,17 +56,14 @@ function AppContent() {
       <Preloader isLoading={isLoading} />
       <AnimatePresence>
         {!isLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}>
             <ScrollManager />
-            <Routes>
-              <Route path="/login" element={<LoginForm />} />
-              <Route path="/register" element={<RegisterForm />} />
+            <Suspense fallback={<Preloader isLoading={true} />}>
+              <Routes>
+                <Route path="/login" element={<LoginForm />} />
+                <Route path="/register" element={<RegisterForm />} />
 
-              <Route path="/" element={<Layout />}>
+                <Route path="/" element={<Layout />}>
                   <Route index element={<Navigate to="/characters" replace />} />
                   <Route path="characters" element={<CharactersPage />} />
                   <Route path="characters/:characterId" element={<CharacterPage />} />
@@ -74,14 +74,19 @@ function AppContent() {
                   <Route path="support" element={<ProtectedRoute><SupportChatPage /></ProtectedRoute>} />
                   <Route path="notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
 
-                  <Route path="user-characters" element={<UserCharactersPage />} />
+                  {/* просмотр конкретного пользовательского персонажа */}
+                  <Route path="user-characters/:id" element={<UserCharacterPage />} />
+
+                  {/* редактор — создание и редактирование */}
                   <Route path="submit-character" element={<ProtectedRoute><SubmitCharacterPage /></ProtectedRoute>} />
+                  <Route path="submit-character/:id" element={<ProtectedRoute><SubmitCharacterPage /></ProtectedRoute>} />
 
                   <Route path="admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-              </Route>
-              
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes> 
+                </Route>
+
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Suspense>
           </motion.div>
         )}
       </AnimatePresence>
@@ -89,12 +94,11 @@ function AppContent() {
   );
 }
 
-// Главный компонент App, оборачивающий все в провайдеры
+// --- App root ---
 function App() {
   return (
     <Router>
-      
-        <AuthProvider>
+      <AuthProvider>
         <DataProvider>
           <UserCharactersProvider>
             <ReviewsProvider>
@@ -103,9 +107,8 @@ function App() {
           </UserCharactersProvider>
         </DataProvider>
       </AuthProvider>
-      
     </Router>
   );
 }
 
-export default App; 
+export default App;
