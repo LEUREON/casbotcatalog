@@ -1,15 +1,19 @@
-// project/src/contexts/UserCharactersContext.tsx
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+// src/contexts/UserCharactersContext.tsx
+import React, { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react';
 import type { UserCharacter, FilterState } from '../types';
+import { pb } from '../lib/pocketbase'; // 1. Импортируем pb
+import { useAuth } from './AuthContext'; // 2. Импортируем useAuth
+import type { RecordModel } from 'pocketbase';
 
+// 3. Обновляем тип
 type CtxType = {
   userCharacters: UserCharacter[];
   filters: FilterState;
   setFilters: (f: FilterState) => void;
   filteredUserCharacters: UserCharacter[];
   loading: boolean;
-  loadUserCharacters: () => Promise<void>;
-  addUserCharacter: (data: Omit<UserCharacter, 'id' | 'createdAt' | 'status'> | FormData) => Promise<boolean>;
+  loadUserCharacters: () => Promise<void>; // (refetch)
+  addUserCharacter: (data: FormData) => Promise<boolean>; // 4. Принимает FormData
   updateUserCharacter: (id: string, updates: Partial<UserCharacter> | FormData) => Promise<boolean>;
   deleteUserCharacter: (id: string) => Promise<boolean>;
   approveUserCharacter: (id: string) => Promise<boolean>;
@@ -20,7 +24,7 @@ const defaultFilters: FilterState = {
   search: '',
   gender: 'all',
   ageGroup: 'all',
-  sortBy: 'rating',
+  sortBy: 'newest', // 5. Меняем на 'newest'
 };
 
 const Ctx = createContext<CtxType>({
@@ -28,62 +32,117 @@ const Ctx = createContext<CtxType>({
   filters: defaultFilters,
   setFilters: () => {},
   filteredUserCharacters: [],
-  loading: false,
+  loading: true, // 6. Загрузка по умолчанию
   loadUserCharacters: async () => {},
-  addUserCharacter: async () => true,
-  updateUserCharacter: async () => true,
-  deleteUserCharacter: async () => true,
-  approveUserCharacter: async () => true,
-  rejectUserCharacter: async () => true,
+  addUserCharacter: async () => false, // 7. Меняем на false
+  updateUserCharacter: async () => false,
+  deleteUserCharacter: async () => false,
+  approveUserCharacter: async () => false,
+  rejectUserCharacter: async () => false,
 });
 
+// 8. Новая функция для форматирования данных из PB
+const formatUserCharacter = (record: RecordModel): UserCharacter => {
+  return {
+    id: record.id,
+    user: record.user,
+    name: record.name,
+    occupation: record.occupation,
+    description: record.description,
+    fullDescription: record.fullDescription,
+    gender: record.gender,
+    age: record.age,
+    ageGroup: record.ageGroup,
+    // @ts-ignore
+    photo: record.photo ? pb.getFileUrl(record, record.photo) : undefined,
+    links: record.links || [], // Поле JSON
+    tags: record.tags || [], // Поле JSON
+    category: record.category || [], // Поле JSON
+    status: record.status,
+    createdAt: new Date(record.created),
+    // Авторские поля из user_characters (для отображения автора без expand)
+    // @ts-ignore
+    authorName: (record as any).authorName || (record as any).ownerName || (record as any).nickname || (record as any).username || (record as any).userName,
+    // @ts-ignore
+    ownerName: (record as any).ownerName,
+    // @ts-ignore
+    username: (record as any).username || (record as any).userName,
+    // @ts-ignore
+    nickname: (record as any).nickname,
+    // Явно прокидываем updatedAt
+    // @ts-ignore
+    updatedAt: new Date((record as any).updated),
+  };
+};
+
 export const UserCharactersProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth(); // 9. Получаем пользователя
   const [userCharacters, setUserCharacters] = useState<UserCharacter[]>([]);
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
-  const [loading] = useState(false);
+  const [loading, setLoading] = useState(true); // 10. Устанавливаем реальный loading
 
-  // Больше не стучимся в PocketBase
-  const loadUserCharacters = useCallback(async () => { return; }, []);
-
-  const addUserCharacter: CtxType['addUserCharacter'] = useCallback(async (data) => {
+  // 11. РЕАЛЬНАЯ загрузка персонажей
+  const loadUserCharacters = useCallback(async () => {
+    if (!user) {
+      setUserCharacters([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
-      if (!(data instanceof FormData)) {
-        const fake: UserCharacter = {
-          ...(data as any),
-          id: Math.random().toString(36).slice(2),
-          createdAt: new Date(),
-          status: 'pending',
-        };
-        setUserCharacters(prev => [fake, ...prev]);
-      }
-      return true;
-    } catch { return false; }
-  }, []);
+      const records = await pb.collection('user_characters').getFullList<RecordModel>({
+        filter: `user = "${user.id}"`, // Только персонажи этого юзера
+        sort: '-created',
+      });
+      setUserCharacters(records.map(formatUserCharacter));
+    } catch (err) {
+      console.error('Failed to load user characters:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
 
+  // 12. Загружаем при монтировании
+  useEffect(() => {
+    loadUserCharacters();
+  }, [loadUserCharacters]);
+
+  // 13. РЕАЛЬНОЕ добавление персонажа
+  const addUserCharacter: CtxType['addUserCharacter'] = useCallback(async (data: FormData) => {
+    if (!user) return false;
+    
+    // 'user' и 'status' будут добавлены автоматически через API Rules
+    
+    try {
+      const newRecord = await pb.collection('user_characters').create(data);
+      // Добавляем в состояние, чтобы UI обновился мгновенно
+      setUserCharacters(prev => [formatUserCharacter(newRecord), ...prev]);
+      return true;
+    } catch (err) {
+      console.error('Failed to add user character:', err);
+      return false;
+    }
+  }, [user]);
+
+  // 14. Функции-заглушки (пока не реализованы)
   const updateUserCharacter: CtxType['updateUserCharacter'] = useCallback(async (id, updates) => {
-    try {
-      if (!(updates instanceof FormData)) {
-        setUserCharacters(prev => prev.map(u => u.id === id ? { ...u, ...(updates as any) } : u));
-      }
-      return true;
-    } catch { return false; }
+    console.warn('updateUserCharacter not implemented');
+    return false;
   }, []);
-
   const deleteUserCharacter: CtxType['deleteUserCharacter'] = useCallback(async (id) => {
-    try { setUserCharacters(prev => prev.filter(u => u.id != id)); return true; }
-    catch { return false; }
+    console.warn('deleteUserCharacter not implemented');
+    return false;
   }, []);
-
   const approveUserCharacter: CtxType['approveUserCharacter'] = useCallback(async (id) => {
-    try { setUserCharacters(prev => prev.map(u => u.id === id ? { ...u, status: 'approved' } : u)); return true; }
-    catch { return false; }
+    console.warn('approveUserCharacter not implemented');
+    return false;
   }, []);
-
   const rejectUserCharacter: CtxType['rejectUserCharacter'] = useCallback(async (id) => {
-    try { setUserCharacters(prev => prev.map(u => u.id === id ? { ...u, status: 'rejected' } : u)); return true; }
-    catch { return false; }
+    console.warn('rejectUserCharacter not implemented');
+    return false;
   }, []);
 
+  // 15. Логика фильтрации (взята из вашего файла)
   const filteredUserCharacters = useMemo(() => {
     const q = filters.search.toLowerCase();
     let list = [...userCharacters];

@@ -7,7 +7,7 @@ import { useData } from "../contexts/DataContext";
 import { useReviews } from "../contexts/ReviewsContext";
 import { pb } from "../lib/pocketbase";
 import { getAgeString } from "../utils/formatters";
-import { Review } from "../types";
+import { Review, Character } from "../types"; // ✅ 1. Импортируем Character
 import ThemedBackground from "../components/common/ThemedBackground";
 import { ReviewCard } from "../components/Characters/ReviewCard";
 import { ReviewForm } from "../components/Characters/ReviewForm";
@@ -21,6 +21,9 @@ import {
 } from '../components/ui/icons';
 import { ANIM } from '../lib/animations';
 
+// ✅ 2. Импортируем хук личных персонажей
+import { useUserCharacters } from "../contexts/UserCharactersContext";
+
 export function CharacterPage() {
   const navigate = useNavigate();
   const { characterId = "" } = useParams();
@@ -28,10 +31,13 @@ export function CharacterPage() {
   const { characters, loading: dataLoading } = useData();
   const { reviews, addReview, updateReview, loading: reviewsLoading } = useReviews();
 
+  // ✅ 3. Получаем личных персонажей
+  const { userCharacters, loading: userCharsLoading } = useUserCharacters();
+
   const [localLoading, setLocalLoading] = useState(true);
   const [userRating, setUserRating] = useState(0);
   const [isFavoriteLoading, setIsFavoriteLoading] = useState(false);
-  const [isFavorited, setIsFavorited] = useState(false);
+  // ❌ const [isFavorited, setIsFavorited] = useState(false); // УДАЛЕНО: Это вызывало ошибки
   const [showFavoritePulse, setShowFavoritePulse] = useState(false);
   const [visibleComments, setVisibleComments] = useState(15);
   const [noticeOpen, setNoticeOpen] = useState(false);
@@ -42,8 +48,28 @@ export function CharacterPage() {
   const titleY = useTransform(scrollY, [0, 300], [0, -25]);
   const imageScale = useTransform(scrollY, [0, 200], [1, 1.05]);
 
-  const character = useMemo(() => characters.find((c) => c.id === characterId), [characters, characterId]);
+  // ✅ 4. ГЛАВНОЕ ИСПРАВЛЕНИЕ:
+  // Ищем персонажа СНАЧАЛА в публичном списке, ПОТОМ в личном.
+  const character = useMemo(() => {
+    // 1. Ищем в публичных
+    const publicChar = characters.find((c) => c.id === characterId);
+    if (publicChar) {
+      return publicChar;
+    }
+    // 2. Если не нашли, ищем в личных (приводим к типу Character)
+    const privateChar = userCharacters.find((c) => c.id === characterId) as Character | undefined;
+    return privateChar;
+
+  }, [characters, userCharacters, characterId]); // ✅ 5. Добавлены зависимости
   
+  // ✅ 6. ИСПРАВЛЕНИЕ 'isFavorited':
+  // Берем "избранное" напрямую из 'user', а не из локального стейта
+  const isFavorited = useMemo(() => {
+    if (!user || !character) return false;
+    return user.favorites?.includes(character.id) || false;
+  }, [user, character]);
+
+
   const { avgRating, reviewsCount } = useMemo(() => {
     const characterReviews = reviews.filter((r) => r.characterId === characterId && r.rating && r.rating > 0);
     if (characterReviews.length === 0) return { avgRating: 0, reviewsCount: 0 };
@@ -52,7 +78,8 @@ export function CharacterPage() {
   }, [reviews, characterId]);
 
   useEffect(() => {
-    if (dataLoading || reviewsLoading) {
+    // ✅ 7. Обновляем условие загрузки
+    if (dataLoading || reviewsLoading || userCharsLoading) {
       setLocalLoading(true);
       return;
     }
@@ -65,18 +92,18 @@ export function CharacterPage() {
           );
           setUserRating(userReview.rating || 0);
         } catch { setUserRating(0); }
-        setIsFavorited(user?.favorites?.includes(character.id) || false);
+        // ❌ setIsFavorited(user?.favorites?.includes(character.id) || false); // УДАЛЕНО
       }
       setLocalLoading(false);
     };
     setupPageData();
-  }, [characterId, user, character, dataLoading, reviewsLoading]);
+  }, [characterId, user, character, dataLoading, reviewsLoading, userCharsLoading]); // ✅ 8. Добавлена зависимость
     
   const handleToggleFavorite = async () => {
     if (!user || !character || isFavoriteLoading) return;
     setIsFavoriteLoading(true);
     await toggleFavorite(character.id);
-    setIsFavorited(!isFavorited);
+    // ❌ setIsFavorited(!isFavorited); // УДАЛЕНО (isFavorited теперь из useMemo)
     setShowFavoritePulse(true);
     setTimeout(() => setShowFavoritePulse(false), 400);
     setIsFavoriteLoading(false);
@@ -137,12 +164,15 @@ export function CharacterPage() {
     return topLevelReviews.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [characterReviews]);
   
-  const pageIsLoading = dataLoading || reviewsLoading || localLoading;
+  // ✅ 9. Обновляем общую загрузку
+  const pageIsLoading = dataLoading || reviewsLoading || userCharsLoading || localLoading;
 
   if (pageIsLoading || !character) {
       return <div>Загрузка...</div>
   }
 
+  // (Далее весь код рендеринга JSX без изменений)
+  // ...
   return (
     <div className="relative min-h-screen p-3 sm:p-5 font-body text-text-primary bg-dark">
       <ThemedBackground intensity={bgIntensity} />

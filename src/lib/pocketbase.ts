@@ -21,7 +21,9 @@ function persistAuth() {
     } else {
       localStorage.removeItem(STORAGE_KEY);
     }
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 export function restoreAuth() {
@@ -30,41 +32,15 @@ export function restoreAuth() {
     if (!raw) return;
     const { token, model } = JSON.parse(raw);
     if (token && model) pb.authStore.save(token, model as any);
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
 
 // restore immediately (before providers mount)
 restoreAuth();
 // keep in sync
 pb.authStore.onChange(() => persistAuth(), true);
-
-// --- НОВЫЙ КОД ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ АУТЕНТИФИКАЦИИ ---
-// Глобальный обработчик для "протухшей" сессии (ошибки 401/400)
-// Он должен быть *в дополнение* к persistAuth
-pb.authStore.onChange((token, model) => {
-  // Если токен и модель пропали (сессия невалидна)
-  // И мы НЕ на главной странице (чтобы избежать цикла перезагрузок)
-  // И НЕ на странице /admin (на всякий случай)
-  if (
-    !token &&
-    !model &&
-    window.location.pathname !== '/' &&
-    !window.location.pathname.startsWith('/admin')
-  ) {
-    console.warn(
-      'Auth token is invalid or expired. Forcing logout via reload.',
-    );
-
-    // Принудительно очищаем хранилище
-    // (persistAuth() выше уже должен был это сделать, но для надежности)
-    pb.authStore.clear();
-
-    // Перезагрузка - самый простой способ сбросить все состояние React
-    // (контексты, состояния) и "разлогинить" пользователя в UI.
-    window.location.reload();
-  }
-}, true);
-// --- КОНЕЦ НОВОГО КОДА ---
 
 // 3) Helpers
 export const formatUser = (model: RecordModel | null): User | null => {
@@ -75,29 +51,54 @@ export const formatUser = (model: RecordModel | null): User | null => {
     nickname: (model as any).nickname,
     email: (model as any).email,
     role: (model as any).role as 'admin' | 'user',
-    avatar: (model as any).avatar
-      ? pb.getFileUrl(model as any, (model as any).avatar)
-      : undefined,
+    avatar: (model as any).avatar ? pb.getFileUrl(model as any, (model as any).avatar) : undefined,
     createdAt: new Date((model as any).created),
     isBlocked: Boolean((model as any).is_blocked),
     favorites: (model as any).favorites || [],
   };
 };
 
-// Refresh JWT a bit before expiry (so it doesn't "слетать")
-export async function ensureFreshAuth(): Promise<void> {
+let isRefreshing = false;
+let refreshPromise: Promise<boolean> | null = null;
+
+export async function ensureFreshAuth(): Promise<boolean> {
+  if (!pb.authStore.model || !pb.authStore.token) {
+    return false;
+  }
+
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
   try {
-    if (!pb.authStore.model || !pb.authStore.token) return;
     const token = pb.authStore.token;
     const payload = JSON.parse(atob(token.split('.')[1]));
     const expMs = payload.exp * 1000;
     const now = Date.now();
     const left = expMs - now;
-    if (left < 60_000) {
-      await pb.collection('users').authRefresh();
+
+    if (left < 120_000) {
+      isRefreshing = true;
+      refreshPromise = (async () => {
+        try {
+          await pb.collection('users').authRefresh();
+          return true;
+        } catch (error) {
+          console.error('Token refresh failed:', error);
+          pb.authStore.clear();
+          return false;
+        } finally {
+          isRefreshing = false;
+          refreshPromise = null;
+        }
+      })();
+      return refreshPromise;
     }
-  } catch {
-    // ignore
+    return true;
+  } catch (error) {
+    console.error('Token validation failed:', error);
+    pb.authStore.clear();
+    return false;
   }
 }
 
@@ -118,8 +119,46 @@ export async function subscribeUserBlock(onBlocked: () => void) {
   return async () => {
     if (unsubbed) return;
     unsubbed = true;
-    try {
-      await pb.collection('users').unsubscribe(id);
-    } catch {}
+    try { await pb.collection('users').unsubscribe(id); } catch {}
   };
+}
+
+
+pb.beforeSend = async (url, options) => {
+  if (!pb.authStore.isValid) {
+    return { url, options };
+  }
+
+  const isAuthEndpoint = url.includes('/api/collections/users/auth-refresh') ||
+                         url.includes('/api/collections/users/auth-with-password');
+
+  if (isAuthEndpoint) {
+    return { url, options };
+  }
+
+  await ensureFreshAuth();
+
+  return { url, options };
+};
+
+setInterval(() => {
+  if (pb.authStore.isValid) {
+    ensureFreshAuth();
+  }
+}, 60_000);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && pb.authStore.isValid) {
+    ensureFreshAuth();
+  }
+});
+
+window.addEventListener('online', () => {
+  if (pb.authStore.isValid) {
+    ensureFreshAuth();
+  }
+});
+
+if (pb.authStore.isValid) {
+  ensureFreshAuth();
 }

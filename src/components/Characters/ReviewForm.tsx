@@ -4,8 +4,7 @@ import { motion } from "framer-motion";
 import { Loader2, Send } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useReviews } from "../../contexts/ReviewsContext";
-import { pb } from "../../lib/pocketbase"; // --- ИЗМЕНЕНО --- (Добавлен импорт pb)
-import { toast } from "sonner"; // --- ИЗМЕНЕНО --- (Добавлен импорт toast)
+import { toast } from "sonner";
 
 interface ReviewFormProps {
   characterId: string;
@@ -24,7 +23,7 @@ export function ReviewForm({
   onCancel,
   autoFocus = false,
 }: ReviewFormProps) {
-  const { user, openAuthDialog } = useAuth(); // --- ИЗМЕНЕНО --- (Добавлен openAuthDialog)
+  const { user, openAuthDialog } = useAuth();
   const { addReview } = useReviews();
   const [comment, setComment] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -47,14 +46,11 @@ export function ReviewForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // --- НОВЫЙ КОД ---
-    // Надежная проверка, что сессия пользователя валидна на сервере
-    if (!user || !pb.authStore.isValid) {
+    if (!user) {
       toast.error("Пожалуйста, войдите в систему, чтобы оставить комментарий.");
-      if (openAuthDialog) openAuthDialog(); // Открываем окно входа
-      return; // Прерываем выполнение
+      if (openAuthDialog) openAuthDialog();
+      return;
     }
-    // --- КОНЕЦ НОВОГО КОДА ---
 
     if (comment.trim().length === 0) return;
 
@@ -77,9 +73,9 @@ export function ReviewForm({
         onSubmit();
       } else {
         setError("Не удалось опубликовать комментарий.");
-        toast.error("Не удалось опубликовать комментарий."); // --- ИЗМЕНЕНО ---
+        toast.error("Не удалось опубликовать комментарий.");
       }
-    } catch (err: any) { // --- ИЗМЕНЕНО ---
+    } catch (err: any) {
       const errorMessage = err?.message || "Произошла неизвестная ошибка.";
       setError(errorMessage);
       toast.error(errorMessage);
